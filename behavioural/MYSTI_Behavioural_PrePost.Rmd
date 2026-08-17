@@ -1,0 +1,362 @@
+---
+title: "MYSTI Study – Pre vs Post Behavioural Panels"
+subtitle: "Word Recognition, Associative Recall, and Memory Fidelity"
+author: "Prince Okyere"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    code_folding: show
+    theme: flatly
+    highlight: tango
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width  = 8,
+  fig.height = 5,
+  dpi = 300
+)
+rm(list = ls())
+```
+
+---
+
+# 1. Setup
+
+## 1.1 Load packages
+
+```{r packages}
+required_packages <- c(
+  "ggplot2", "dplyr", "tidyr", "scales",
+  "patchwork", "readxl"
+)
+new_pkg <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
+if (length(new_pkg)) install.packages(new_pkg, dependencies = TRUE)
+invisible(lapply(required_packages, library, character.only = TRUE))
+cat("All packages loaded\n")
+```
+
+## 1.2 Paths and constants
+
+```{r config}
+PRE_FILE  <- "C:/Users/po00240/OneDrive - University of Surrey/Desktop/Wake_behavior_data/Participants_pre_data_transcribed_corrected.xlsx"
+POST_FILE <- "C:/Users/po00240/OneDrive - University of Surrey/Desktop/Wake_behavior_data/Participants_post_data_transcribed_corrected.xlsx"
+FIG_DIR   <- "C:/Users/po00240/OneDrive - University of Surrey/Desktop/Wake_behavior_data/Chapter3_Supplementary/Figures2"
+dir.create(FIG_DIR, showWarnings = FALSE, recursive = TRUE)
+
+numify  <- function(x) suppressWarnings(as.numeric(as.character(x)))
+p_label <- function(p) {
+  if (p < .001) return("***")
+  if (p < .01)  return("**")
+  if (p < .05)  return("*")
+  return("ns")
+}
+
+col_pre  <- "#4A90D9"
+col_post <- "#E8925A"
+
+th <- theme_classic(base_size = 9) +
+  theme(
+    legend.position = "none",
+    axis.line       = element_line(linewidth = 0.6, colour = "black"),
+    axis.text       = element_text(size = 8,  colour = "black"),
+    axis.title      = element_text(size = 9,  colour = "black"),
+    axis.title.x    = element_text(size = 8),
+    plot.margin     = margin(15, 10, 5, 10)
+  )
+
+cat("Configuration complete\n")
+```
+
+## 1.3 Plot helper functions
+
+```{r plot_helpers}
+# Panels reported as a percentage (word recognition, associative recall)
+make_bar_plot_pct <- function(pre_vals, post_vals, y_label, sig_label) {
+
+  n  <- length(pre_vals)
+  id <- seq_len(n)
+
+  long_df <- data.frame(
+    id      = rep(id, 2),
+    Session = factor(rep(c("Pre", "Post"), each = n), levels = c("Pre", "Post")),
+    Rate    = c(pre_vals, post_vals) * 100
+  )
+
+  summ_df <- long_df %>%
+    group_by(Session) %>%
+    summarise(
+      mean_rate = mean(Rate, na.rm = TRUE),
+      se        = sd(Rate,   na.rm = TRUE) / sqrt(sum(!is.na(Rate))),
+      .groups   = "drop"
+    )
+
+  y_max  <- max(long_df$Rate, na.rm = TRUE)
+  y_bar  <- y_max + 6
+  y_tick <- y_bar - 2
+
+  ggplot() +
+    geom_col(data = summ_df,
+             aes(x = Session, y = mean_rate, fill = Session),
+             width = 0.55, colour = NA) +
+    scale_fill_manual(values = c("Pre" = col_pre, "Post" = col_post)) +
+    geom_line(data = long_df,
+              aes(x = Session, y = Rate, group = id),
+              colour = "grey60", linewidth = 0.4, alpha = 0.7) +
+    geom_point(data = long_df,
+               aes(x = Session, y = Rate, fill = Session),
+               shape = 21, size = 2.0, stroke = 0.5,
+               colour = "white", alpha = 0.9,
+               position = position_jitter(width = 0.05, seed = 42, height = 0)) +
+    geom_errorbar(data = summ_df,
+                  aes(x = Session, ymin = mean_rate - se, ymax = mean_rate + se),
+                  width = 0.12, linewidth = 0.7, colour = "black") +
+    annotate("segment", x = 1, xend = 2, y = y_bar,  yend = y_bar,  linewidth = 0.6) +
+    annotate("segment", x = 1, xend = 1, y = y_tick, yend = y_bar,  linewidth = 0.6) +
+    annotate("segment", x = 2, xend = 2, y = y_tick, yend = y_bar,  linewidth = 0.6) +
+    annotate("text", x = 1.5, y = y_bar + 1.5, label = sig_label,
+             size = 4.5, vjust = 0) +
+    scale_y_continuous(
+      limits = c(0, y_bar + 10),
+      expand = expansion(mult = c(0, 0))
+    ) +
+    labs(x = "Session", y = y_label) +
+    th
+}
+
+# Panel reported on the raw 0-3 fidelity scale
+make_bar_plot_scale <- function(pre_vals, post_vals, y_label, sig_label) {
+
+  n  <- length(pre_vals)
+  id <- seq_len(n)
+
+  long_df <- data.frame(
+    id      = rep(id, 2),
+    Session = factor(rep(c("Pre", "Post"), each = n), levels = c("Pre", "Post")),
+    Score   = c(pre_vals, post_vals)
+  )
+
+  summ_df <- long_df %>%
+    group_by(Session) %>%
+    summarise(
+      Mean = mean(Score, na.rm = TRUE),
+      SE   = sd(Score,   na.rm = TRUE) / sqrt(sum(!is.na(Score))),
+      .groups = "drop"
+    )
+
+  y_max  <- max(long_df$Score, na.rm = TRUE)
+  y_bar  <- y_max + 0.2
+  y_tick <- y_bar - 0.08
+
+  ggplot() +
+    geom_col(data = summ_df,
+             aes(x = Session, y = Mean, fill = Session),
+             width = 0.55, colour = NA) +
+    scale_fill_manual(values = c("Pre" = col_pre, "Post" = col_post)) +
+    geom_line(data = long_df,
+              aes(x = Session, y = Score, group = id),
+              colour = "grey60", linewidth = 0.4, alpha = 0.7) +
+    geom_point(data = long_df,
+               aes(x = Session, y = Score, fill = Session),
+               shape = 21, size = 2.0, stroke = 0.5,
+               colour = "white", alpha = 0.9,
+               position = position_jitter(width = 0.05, seed = 42, height = 0)) +
+    geom_errorbar(data = summ_df,
+                  aes(x = Session, ymin = Mean - SE, ymax = Mean + SE),
+                  width = 0.12, linewidth = 0.7, colour = "black") +
+    annotate("segment", x = 1, xend = 2, y = y_bar,  yend = y_bar,  linewidth = 0.6) +
+    annotate("segment", x = 1, xend = 1, y = y_tick, yend = y_bar,  linewidth = 0.6) +
+    annotate("segment", x = 2, xend = 2, y = y_tick, yend = y_bar,  linewidth = 0.6) +
+    annotate("text", x = 1.5, y = y_bar + 0.05, label = sig_label,
+             size = 4.5, vjust = 0) +
+    scale_y_continuous(
+      limits = c(0, y_bar + 0.3),
+      expand = expansion(mult = c(0, 0))
+    ) +
+    labs(x = "Session", y = y_label) +
+    th
+}
+
+cat("Plot helpers defined\n")
+```
+
+## 1.4 Load raw data
+
+```{r load_data}
+pre_raw <- read_excel(PRE_FILE, sheet = 1) %>%
+  filter(!is.na(words), trimws(words) != "") %>%
+  mutate(
+    word_acc  = as.integer(numify(word_selection_Accuracy)),
+    img_acc   = as.integer(numify(Images_Selection_Accuracy)),
+    scale     = as.integer(numify(`scale manual`)),
+    Condition = as.factor(Condition),
+    sub       = as.factor(participant_id)
+  )
+
+post_raw <- read_excel(POST_FILE, sheet = 1) %>%
+  filter(!is.na(words), trimws(words) != "") %>%
+  mutate(
+    word_acc  = as.integer(numify(word_selection_Accuracy)),
+    img_acc   = as.integer(numify(Images_Selection_Accuracy)),
+    scale     = as.integer(numify(`scale manual`)),
+    Condition = as.factor(Condition),
+    sub       = as.factor(participant_id)
+  )
+
+cat(sprintf("PRE  rows: %d | Participants: %d\n", nrow(pre_raw), n_distinct(pre_raw$sub)))
+cat(sprintf("POST rows: %d | Participants: %d\n", nrow(post_raw), n_distinct(post_raw$sub)))
+```
+
+---
+
+# 2. Word Recognition (Familiarity)
+
+All 28 participants, all 120 old items collapsed across condition.
+
+```{r word_recognition}
+fam_pp <- inner_join(
+  pre_raw %>%
+    filter(Corr_resp_Old_New_ == "Old") %>%
+    mutate(word_acc_filled = ifelse(is.na(word_acc), 0L, word_acc)) %>%
+    group_by(sub) %>%
+    summarise(Pre = mean(word_acc_filled == 1), .groups = "drop"),
+  post_raw %>%
+    filter(Corr_resp_Old_New_ == "Old") %>%
+    mutate(word_acc_filled = ifelse(is.na(word_acc), 0L, word_acc)) %>%
+    group_by(sub) %>%
+    summarise(Post = mean(word_acc_filled == 1), .groups = "drop"),
+  by = "sub"
+)
+
+t_fam <- t.test(fam_pp$Post, fam_pp$Pre, paired = TRUE)
+d_fam <- (mean(fam_pp$Pre) - mean(fam_pp$Post)) / sd(fam_pp$Pre - fam_pp$Post)
+
+cat("=== Word Recognition — Pre vs Post ===\n")
+cat(sprintf("N = %d\n", nrow(fam_pp)))
+cat(sprintf("Pre:  %.1f%% (SD = %.1f%%)\n", mean(fam_pp$Pre)*100,  sd(fam_pp$Pre)*100))
+cat(sprintf("Post: %.1f%% (SD = %.1f%%)\n", mean(fam_pp$Post)*100, sd(fam_pp$Post)*100))
+cat(sprintf("t(%d) = %.2f, p = %.4f, d = %.2f %s\n",
+            t_fam$parameter, t_fam$statistic, t_fam$p.value, d_fam, p_label(t_fam$p.value)))
+```
+
+---
+
+# 3. Associative Recall (Recollection)
+
+All 28 participants.
+
+```{r associative_recall}
+rec_pp <- inner_join(
+  pre_raw %>%
+    filter(Corr_resp_Old_New_ == "Old") %>%
+    mutate(word_acc_filled = ifelse(is.na(word_acc), 0L, word_acc),
+           img_acc_filled  = ifelse(is.na(img_acc),  0L, img_acc)) %>%
+    group_by(sub) %>%
+    summarise(Pre = mean(word_acc_filled == 1 & img_acc_filled == 1), .groups = "drop"),
+  post_raw %>%
+    filter(Corr_resp_Old_New_ == "Old") %>%
+    mutate(word_acc_filled = ifelse(is.na(word_acc), 0L, word_acc),
+           img_acc_filled  = ifelse(is.na(img_acc),  0L, img_acc)) %>%
+    group_by(sub) %>%
+    summarise(Post = mean(word_acc_filled == 1 & img_acc_filled == 1), .groups = "drop"),
+  by = "sub"
+)
+
+t_rec <- t.test(rec_pp$Post, rec_pp$Pre, paired = TRUE)
+d_rec <- (mean(rec_pp$Pre) - mean(rec_pp$Post)) / sd(rec_pp$Pre - rec_pp$Post)
+
+cat("=== Associative Recall — Pre vs Post ===\n")
+cat(sprintf("N = %d\n", nrow(rec_pp)))
+cat(sprintf("Pre:  %.1f%% (SD = %.1f%%)\n", mean(rec_pp$Pre)*100,  sd(rec_pp$Pre)*100))
+cat(sprintf("Post: %.1f%% (SD = %.1f%%)\n", mean(rec_pp$Post)*100, sd(rec_pp$Post)*100))
+cat(sprintf("t(%d) = %.2f, p = %.4f, d = %.2f %s\n",
+            t_rec$parameter, t_rec$statistic, t_rec$p.value, d_rec, p_label(t_rec$p.value)))
+```
+
+---
+
+# 4. Memory Fidelity
+
+Raw 0–3 scale means; sub-29 excluded (no post scale data available — recording issue).
+
+```{r memory_fidelity}
+scale_pre <- pre_raw %>%
+  filter(Corr_resp_Old_New_ == "Old",
+         sub != "sub-29",
+         !is.na(scale)) %>%
+  group_by(sub) %>%
+  summarise(Pre = mean(scale, na.rm = TRUE), .groups = "drop")
+
+scale_post <- post_raw %>%
+  filter(Corr_resp_Old_New_ == "Old",
+         sub != "sub-29",
+         !is.na(scale)) %>%
+  group_by(sub) %>%
+  summarise(Post = mean(scale, na.rm = TRUE), .groups = "drop")
+
+fid_scale <- inner_join(scale_pre, scale_post, by = "sub")
+
+t_fid <- t.test(fid_scale$Post, fid_scale$Pre, paired = TRUE)
+diff  <- fid_scale$Post - fid_scale$Pre
+d_fid <- mean(diff) / sd(diff)
+
+cat("=== Memory Fidelity — Pre vs Post (raw 0-3 scale, sub-29 excluded) ===\n")
+cat(sprintf("N = %d\n", nrow(fid_scale)))
+cat(sprintf("Pre  mean: %.2f (SD = %.2f)\n", mean(fid_scale$Pre),  sd(fid_scale$Pre)))
+cat(sprintf("Post mean: %.2f (SD = %.2f)\n", mean(fid_scale$Post), sd(fid_scale$Post)))
+cat(sprintf("t(%d) = %.2f, p = %.4f, d = %.2f %s\n",
+            t_fid$parameter, t_fid$statistic, t_fid$p.value, d_fid, p_label(t_fid$p.value)))
+```
+
+---
+
+# 5. Combined Figure
+
+```{r fig_combined, fig.width=7, fig.height=3.2}
+p_fam <- make_bar_plot_pct(fam_pp$Pre, fam_pp$Post,
+                           "Word Recognition Accuracy (%)",
+                           p_label(t_fam$p.value))
+
+p_rec <- make_bar_plot_pct(rec_pp$Pre, rec_pp$Post,
+                           "Associative Recall Accuracy (%)",
+                           p_label(t_rec$p.value))
+
+p_fid <- make_bar_plot_scale(fid_scale$Pre, fid_scale$Post,
+                             "Memory Fidelity\n(mean score, 0\u20133 scale)",
+                             p_label(t_fid$p.value))
+
+p_combined <- (p_fam | p_rec | p_fid) +
+  plot_annotation(tag_levels = list(c("i", "ii", "iii"))) &
+  theme(plot.tag = element_text(size = 11, face = "bold"))
+
+print(p_combined)
+
+ggsave(file.path(FIG_DIR, "FigS1e_combined.png"),
+       p_combined, width = 7.0, height = 3.2, dpi = 600)
+ggsave(file.path(FIG_DIR, "FigS1e_combined.pdf"),
+       p_combined, width = 7.0, height = 3.2, device = cairo_pdf)
+cat("Saved: FigS1e_combined\n")
+
+ggsave(file.path(FIG_DIR, "FigS1e_i_WordRecognition.png"),
+       p_fam, width = 2.2, height = 2.5, dpi = 600)
+ggsave(file.path(FIG_DIR, "FigS1e_ii_AssociativeRecall.png"),
+       p_rec, width = 2.2, height = 2.5, dpi = 600)
+ggsave(file.path(FIG_DIR, "FigS1e_iii_MemoryFidelity_Scale.png"),
+       p_fid, width = 2.2, height = 2.5, dpi = 600)
+cat("Saved: Individual panels\n")
+```
+
+---
+
+# 6. Session Information
+
+```{r session_info}
+sessionInfo()
+```

@@ -1,0 +1,34 @@
+# Data files - never commit real subject data
+*.set
+*.edf
+*.fdt
+*.xlsx
+*.xls
+*.csv
+*.mat
+*.tsv
+sub-*/
+
+# R
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+*.html
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Output figures (regenerate from code, don't commit binaries)
+*.png
+*.pdf
+*.svg
+*.tiff
+*.eps
+*.fig

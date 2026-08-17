@@ -1,0 +1,315 @@
+---
+title: "MYSTI Study – E-field Subregion Analysis"
+subtitle: "Hippocampal Head vs Body vs Tail: Strength, Selectivity, Collateral"
+author: "Prince Okyere"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    code_folding: show
+    theme: flatly
+    highlight: tango
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width  = 8,
+  fig.height = 5,
+  dpi = 300
+)
+rm(list = ls())
+```
+
+Nature Neuroscience figure dimensions: 183mm double column, 7pt font. LME
+pairwise contrasts with FDR correction plus beeswarm dots.
+
+---
+
+# 1. Setup
+
+## 1.1 Load packages
+
+```{r packages}
+required_packages <- c("tidyverse", "lme4", "lmerTest", "emmeans",
+                       "ggplot2", "ggbeeswarm", "patchwork",
+                       "ggsignif", "scales", "svglite")
+
+for (pkg in required_packages) {
+  if (!requireNamespace(pkg, quietly = TRUE)) install.packages(pkg)
+  library(pkg, character.only = TRUE)
+}
+cat("All packages loaded\n")
+```
+
+## 1.2 Paths and constants
+
+```{r config}
+# ==== EDIT FOR YOUR ENVIRONMENT ====
+BASE_PATH <- "/path/to/MYSTI"
+# ====================================
+
+out_dir <- file.path(BASE_PATH, "derivatives", "EField_Subregions")
+dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+cat("Output folder:", out_dir, "\n")
+
+# Nature figure settings
+fig_width_mm  <- 183   # double column
+fig_height_mm <- 60    # adjust if brackets need more space
+font_size     <- 10    # matches the behavioural analysis notebook's base_size
+# font_family intentionally not set - relies on ggplot2's device default,
+# consistent with the behavioural analysis notebook
+```
+
+## 1.3 Load data
+
+```{r load_data}
+df <- read.csv(file.path(BASE_PATH, "ALL_subjects_TI_metrics.csv"))
+df <- df[, !grepl("^Unnamed", colnames(df))]
+colnames(df) <- c("Subject", "Region", "Strength", "Selectivity", "Collateral")
+
+# Scale strength by factor of 4 (simulation 0.25:0.75 mA -> actual 1:3 mA)
+df$Strength <- ifelse(df$Region %in% c("Left-HP_head","Left-HP_body","Left-HP_tail"),
+                      df$Strength * 4, df$Strength)
+
+ROI <- c("Left-HP_head", "Left-HP_body", "Left-HP_tail")
+
+roi_df <- df %>%
+  filter(Region %in% ROI) %>%
+  mutate(
+    Region  = factor(Region,
+                     levels = ROI,
+                     labels = c("HP-Head", "HP-Body", "HP-Tail")),
+    Subject = factor(Subject)
+  )
+
+cat("Subjects:", nlevels(roi_df$Subject), "\n")
+print(table(roi_df$Region))
+```
+
+---
+
+# 2. Descriptive Statistics
+
+```{r descriptives}
+desc_all <- map_dfr(c("Strength", "Selectivity", "Collateral"), function(metric) {
+  roi_df %>%
+    group_by(Region) %>%
+    summarise(
+      Metric = metric,
+      n      = n(),
+      Mean   = round(mean(.data[[metric]]),   2),
+      SD     = round(sd(.data[[metric]]),     2),
+      Median = round(median(.data[[metric]]), 2),
+      Q25    = round(quantile(.data[[metric]], 0.25), 2),
+      Q75    = round(quantile(.data[[metric]], 0.75), 2),
+      .groups = "drop"
+    )
+})
+print(desc_all)
+write.csv(desc_all, file.path(out_dir, "descriptive_stats.csv"), row.names = FALSE)
+```
+
+---
+
+# 3. LME and Pairwise Contrasts
+
+```{r lme_contrasts}
+lme_results <- list()
+
+for (metric in c("Strength", "Selectivity", "Collateral")) {
+  cat("\n===", metric, "===\n")
+
+  formula <- as.formula(paste(metric, "~ Region + (1|Subject)"))
+  m <- lmerTest::lmer(formula, data = roi_df, REML = FALSE)
+
+  cat("LME:\n")
+  print(anova(m))
+
+  emm   <- emmeans(m, ~ Region)
+  pairs <- as.data.frame(pairs(emm, adjust = "fdr"))
+  cat("Pairwise contrasts (FDR):\n")
+  print(pairs)
+
+  lme_results[[metric]] <- list(model = m, emm = emm, pairs = pairs)
+}
+
+write.csv(
+  bind_rows(lapply(names(lme_results), function(m) {
+    cbind(Metric = m, lme_results[[m]]$pairs)
+  })),
+  file.path(out_dir, "lme_pairwise_contrasts.csv"),
+  row.names = FALSE
+)
+```
+
+---
+
+# 4. Plots
+
+## 4.1 Helper functions
+
+```{r plot_helpers}
+get_sig_pairs <- function(metric) {
+  lme_results[[metric]]$pairs %>%
+    filter(p.value < 0.05) %>%
+    mutate(
+      r1  = trimws(gsub("\\(|\\)", "", sub(" - .*", "", contrast))),
+      r2  = trimws(gsub("\\(|\\)", "", sub(".* - ", "", contrast))),
+      sig = case_when(
+        p.value < 0.001 ~ "***",
+        p.value < 0.01  ~ "**",
+        TRUE            ~ "*"
+      )
+    ) %>%
+    select(r1, r2, sig)
+}
+
+palette <- c(
+  "HP-Head" = "#E76F51",
+  "HP-Body" = "#2A9D8F",
+  "HP-Tail" = "#A68A64"
+)
+
+y_labels <- c(
+  Strength    = "Strength (V/m)",
+  Selectivity = "Selectivity",
+  Collateral  = "Collateral (%)"
+)
+
+make_barplot <- function(metric, data) {
+
+  sum_df <- data %>%
+    group_by(Region) %>%
+    summarise(
+      Mean = mean(.data[[metric]]),
+      SEM  = sd(.data[[metric]]) / sqrt(n()),
+      .groups = "drop"
+    )
+
+  sig_pairs   <- get_sig_pairs(metric)
+  comparisons <- mapply(c, sig_pairs$r1, sig_pairs$r2, SIMPLIFY = FALSE)
+  annotations <- sig_pairs$sig
+
+  data_max <- max(sum_df$Mean + sum_df$SEM)
+  step     <- data_max * 0.12
+  y_steps  <- seq(
+    data_max + step,
+    data_max + step * max(length(comparisons), 1),
+    by = step
+  )
+  y_limit <- ifelse(length(comparisons) > 0,
+                    max(y_steps) * 1.1,
+                    data_max * 1.25)
+
+  ggplot(sum_df, aes(x = Region, y = Mean, fill = Region)) +
+    geom_col(width = 0.65, colour = "black", linewidth = 0.3) +
+    geom_errorbar(aes(ymin = Mean - SEM, ymax = Mean + SEM),
+                  width = 0.15, linewidth = 0.3) +
+    geom_beeswarm(
+      data        = data,
+      aes(x = Region, y = .data[[metric]]),
+      size        = 0.8,
+      alpha       = 0.70,
+      cex         = 1.2,
+      shape       = 21,
+      fill        = "white",
+      colour      = "black",
+      stroke      = 0.3,
+      inherit.aes = FALSE
+    ) +
+    { if (length(comparisons) > 0)
+      ggsignif::geom_signif(
+        comparisons = comparisons,
+        annotations = annotations,
+        y_position  = y_steps,
+        tip_length  = 0.005,
+        textsize    = 2.5,
+        vjust       = 0.3,
+        colour      = "black",
+        size        = 0.3
+      )
+    } +
+    scale_fill_manual(values = palette) +
+    scale_y_continuous(
+      labels = label_number(accuracy = 0.01),
+      expand = expansion(mult = c(0.02, 0.02)),
+      limits = c(0, y_limit)
+    ) +
+    labs(x = NULL, y = y_labels[[metric]]) +
+    theme_classic(base_size = font_size) +
+    theme(
+      legend.position  = "none",
+      axis.text.x      = element_text(size = font_size),
+      axis.text.y      = element_text(size = font_size),
+      axis.title.y     = element_text(size = font_size),
+      axis.line        = element_line(linewidth = 0.3),
+      axis.ticks       = element_line(linewidth = 0.3),
+      plot.margin      = margin(2, 2, 2, 2, "mm")
+    )
+}
+
+cat("Plot helpers defined\n")
+```
+
+## 4.2 Build and save figures
+
+Panel sizes (3.2 x 3.2 in individual, 9.6 x 3.5 in combined) match the
+behavioural analysis notebook's figures rather than the mm-based Nature
+dimensions used elsewhere in this notebook, so exported SVGs open at a
+consistent size across the whole figure set without needing to resize.
+
+```{r fig_efield_subregions, fig.width=9.6, fig.height=3.5}
+p1 <- make_barplot("Strength",    roi_df)
+p2 <- make_barplot("Selectivity", roi_df)
+p3 <- make_barplot("Collateral",  roi_df)
+
+combined <- (p1 | p2 | p3) +
+  plot_layout(widths = c(1, 1, 1))
+
+print(combined)
+
+# Save as TIFF at 600 dpi — Nature standard
+ggsave(file.path(out_dir, "fig_efield_subregions.tiff"),
+       combined, width = 9.6, height = 3.5, dpi = 600, device = "tiff")
+
+# PDF for vector editing in Illustrator
+ggsave(file.path(out_dir, "fig_efield_subregions.pdf"),
+       combined, width = 9.6, height = 3.5, device = cairo_pdf)
+
+# SVG, same size as the combined behavioural figures
+ggsave(file.path(out_dir, "fig_efield_subregions.svg"),
+       combined, width = 9.6, height = 3.5, device = "svg")
+
+# Individual panels, same size as the single-panel behavioural figures
+ggsave(file.path(out_dir, "bar_Strength.tiff"),
+       p1, width = 3.2, height = 3.2, dpi = 600)
+ggsave(file.path(out_dir, "bar_Strength.svg"),
+       p1, width = 3.2, height = 3.2, device = "svg")
+
+ggsave(file.path(out_dir, "bar_Selectivity.tiff"),
+       p2, width = 3.2, height = 3.2, dpi = 600)
+ggsave(file.path(out_dir, "bar_Selectivity.svg"),
+       p2, width = 3.2, height = 3.2, device = "svg")
+
+ggsave(file.path(out_dir, "bar_Collateral.tiff"),
+       p3, width = 3.2, height = 3.2, dpi = 600)
+ggsave(file.path(out_dir, "bar_Collateral.svg"),
+       p3, width = 3.2, height = 3.2, device = "svg")
+
+cat("Saved combined (9.6 x 3.5 in) and individual (3.2 x 3.2 in) panels to:\n")
+cat(out_dir, "\n")
+```
+
+---
+
+# 5. Session Information
+
+```{r session_info}
+sessionInfo()
+```
