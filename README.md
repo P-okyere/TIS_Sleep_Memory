@@ -16,7 +16,7 @@ Raw EEG to artifact-corrected, analysis-ready data.
 3. `C_SLEEPMARKERS2EEG_DATA.m` — import manual sleep-stage markers
 4. `D_MYST_ART_CORR.m` — bad-channel interpolation, re-referencing, artifact segment removal (interactive)
 
-### 2. `sleep_detection/`
+### 2. `sleep_oscillation_detection/`
 `YASA_SO_Spindle_Detection.py` — YASA-based slow oscillation and spindle
 detection (slow/fast/all bands) across all channels, all subjects.
 
