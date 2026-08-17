@@ -34,8 +34,7 @@ Cluster-permutation statistics and figures for each measure:
 Each measure has a `*_cluster_permutation_stats.m` (or
 `*_TOPOplot_gamma_lme.m`-style) script that runs the stats and saves
 per-cluster significant-channel CSVs, and where applicable a matching
-`*_barplots.m` script that loads those CSVs (never hardcodes channel
-lists) and produces the bar chart + pairwise stats.
+`*_barplots.m` script that loads those CSVs and produces the bar chart + pairwise stats.
 
 ### 5. `efield/`
 E-field simulation results (Sim4Life output).
