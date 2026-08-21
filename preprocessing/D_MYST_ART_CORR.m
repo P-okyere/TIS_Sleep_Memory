@@ -4,7 +4,7 @@
 % MYSTI pipeline - Prince Okyere, NSN Lab / KCL
 % Last updated: 2026-08-13
 %
-% Run section-by-section (Ctrl+Enter), not all at once - Section "Mark bad
+% Run section-by-section, not all at once - Section "Mark bad
 % time segments interactively" pauses for you to mark bad segments in the
 % eegplot window before the final section can read them back out as
 % boundary events.
@@ -22,7 +22,7 @@ eeglab_path   = '/path/to/eeglab';
 chanlookup    = fullfile(scripts_path, 'standard_1005.elc');
 
 data_root     = '/path/to/MYSTI/EEG';
-sub_id        = '030';       % subject ID used in folder paths, e.g. '030'
+sub_id        = '024';       % subject ID used in folder paths, e.g. '024'
 ses_id        = 'NapS001';   % session ID, e.g. 'NapS001'
 
 analysis_sub_id = '03';      % subject ID used in FINAL analysis filenames
