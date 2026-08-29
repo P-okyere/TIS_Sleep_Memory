@@ -15,64 +15,84 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(
-  echo    = TRUE,
-  warning = FALSE,
-  message = FALSE,
-  fig.width  = 8,
-  fig.height = 5,
-  dpi = 300
-)
-rm(list = ls())
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
 
-Nature Neuroscience figure dimensions: 89mm per panel, 7pt font.
+# Overview
+
+This notebook tests whether individual differences in hippocampal head (HP-Head)
+E-field **strength**, **selectivity**, and **collateral exposure** relate to
+associative recall forgetting, separately for the **TIS+Cue** and
+**TIS+Cue delayed** conditions.
+
+For each E-field metric, two models are fitted:
+
+1. **No-covariate model** — tests the raw relationship between the metric,
+   condition, and forgetting.
+2. **Covariate model** — repeats the same model including each participant's
+   Cue-only forgetting rate as a covariate, to check whether any effect is
+   specific to the field metric rather than a general trait-level tendency
+   to forget more.
 
 ---
 
-# 1. Setup
-
-## 1.1 Load packages
+# Step 1 — Load packages
 
 ```{r packages}
-required_packages <- c("tidyverse", "readxl", "ggplot2",
-                       "patchwork", "scales", "lme4",
-                       "lmerTest", "emmeans", "svglite")
+required_packages <- c(
+  "tidyverse", "readxl", "ggplot2", "patchwork", "scales",
+  "lme4", "lmerTest", "emmeans", "svglite", "effectsize",
+  "car", "interactions"
+)
 
-for (pkg in required_packages) {
-  if (!requireNamespace(pkg, quietly = TRUE)) install.packages(pkg)
-  library(pkg, character.only = TRUE)
+missing_packages <- required_packages[
+  !sapply(required_packages, requireNamespace, quietly = TRUE)
+]
+
+if (length(missing_packages) > 0) {
+  stop(
+    "Missing packages: ", paste(missing_packages, collapse = ", "),
+    "\nInstall with: install.packages(c(",
+    paste0('"', missing_packages, '"', collapse = ", "), "))"
+  )
 }
-cat("All packages loaded\n")
+
+invisible(lapply(required_packages, library, character.only = TRUE))
 ```
 
-## 1.2 Paths and constants
+# Step 2 — Set paths and figure/colour conventions
 
-```{r config}
-# ==== EDIT FOR YOUR ENVIRONMENT ====
-BASE_PATH       <- "/path/to/MYSTI"
-BEHAVIOUR_FILE  <- "/path/to/MYSTI/FamRecFid_Tables/MYSTI_FamRecFid_V2_NAkept.xlsx"
-# ====================================
-
-efield_file <- file.path(BASE_PATH, "ALL_subjects_TI_metrics.csv")
-out_dir     <- file.path(BASE_PATH, "derivatives", "EField_Behaviour")
+```{r paths}
+base        <- "C:/Users/po00240/OneDrive - University of Surrey/Desktop/Projects/MYSTI"
+behav_v2    <- "C:/Users/po00240/OneDrive - University of Surrey/Desktop/Wake_behavior_data/figure3/FamRecFid_Tables/MYSTI_FamRecFid_V2_NAkept.xlsx"
+efield_file <- file.path(base, "ALL_subjects_TI_metrics.csv")
+out_dir     <- file.path(base, "stats_output", "EField_Behaviour")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
-cat("Output folder:", out_dir, "\n")
-
-# Nature figure settings
-fig_width_single <- 89    # mm - single column
-fig_width_double <- 183   # mm - double column
-fig_height_mm    <- 65    # mm
-font_size        <- 10    # matches the behavioural analysis notebook's base_size
-# font_family intentionally not set - relies on ggplot2's device default,
-# consistent with the behavioural analysis notebook
 ```
 
-## 1.3 Load E-field data (Left HP-Head, scaled x4)
+```{r theme}
+# Condition colours, used consistently across all figures in this project
+condition_colors <- c(
+  "TIS+Cue"         = "#BE83DC",  # purple
+  "TIS+Cue delayed" = "#2E97EE"   # blue
+)
 
-Simulations were run at 0.25:0.75 mA; actual delivery was 1:3 mA.
+# Plain, no-gridline theme matching the rest of the manuscript figures
+theme_nature <- theme_minimal(base_size = 10) +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line  = element_line(color = "black", linewidth = 0.5),
+    axis.ticks = element_line(color = "black", linewidth = 0.4),
+    legend.position = "top"
+  )
+```
 
-```{r load_efield}
+# Step 3 — Load and merge data
+
+```{r load-data}
+# E-field metrics: Left HP-Head only, strength scaled x4
+# (simulation 0.25:0.75 mA -> actual 1:3 mA delivery)
 df_ef <- read.csv(efield_file)
 df_ef <- df_ef[, !grepl("^Unnamed", colnames(df_ef))]
 colnames(df_ef) <- c("Subject", "Region", "Strength", "Selectivity", "Collateral")
@@ -82,202 +102,113 @@ hp_head <- df_ef %>%
   distinct(Subject, .keep_all = TRUE) %>%
   mutate(HP_Head_Strength = Strength * 4) %>%
   rename(participant_id = Subject) %>%
-  select(participant_id, HP_Head_Strength,
-         HP_Head_Selectivity = Selectivity,
-         HP_Head_Collateral  = Collateral)
+  dplyr::select(participant_id, HP_Head_Strength,
+                HP_Head_Selectivity = Selectivity,
+                HP_Head_Collateral  = Collateral)
 
-cat(sprintf("HP-Head E-field: %d participants\n", nrow(hp_head)))
-```
+# Behaviour: forgetting_pct = 100 - recollection_pct
+behav <- read_excel(behav_v2, sheet = "EEG_Correlation_Master")
 
-## 1.4 Load behaviour data
-
-Recollection forgetting (V2), TIS+Cue conditions only.
-`forgetting_pct = 100 - recollection_pct`.
-
-```{r load_behaviour}
-behav <- read_excel(BEHAVIOUR_FILE, sheet = "EEG_Correlation_Master")
+behav_cue <- behav %>%
+  transmute(participant_id, CueOnlyForgetting = 100 - V2_Cue_recollection_pct)
 
 behav_long <- bind_rows(
-  behav %>%
-    transmute(participant_id, condition = "TIS+Cue",
-              forgetting_pct = 100 - V2_TISCue_recollection_pct),
-  behav %>%
-    transmute(participant_id, condition = "TIS+Cue delayed",
-              forgetting_pct = 100 - V2_TISCue_delayed_recollection_pct)
-)
+  behav %>% transmute(participant_id, condition = "TIS+Cue",
+                       forgetting_pct = 100 - V2_TISCue_recollection_pct),
+  behav %>% transmute(participant_id, condition = "TIS+Cue delayed",
+                       forgetting_pct = 100 - V2_TISCue_delayed_recollection_pct)
+) %>%
+  left_join(behav_cue, by = "participant_id")
 
 merged <- inner_join(behav_long, hp_head, by = "participant_id") %>%
   mutate(
     participant_id = factor(participant_id),
-    condition       = factor(condition, levels = c("TIS+Cue", "TIS+Cue delayed"))
+    condition = factor(condition, levels = c("TIS+Cue", "TIS+Cue delayed"))
   )
 
 cat(sprintf("Merged: %d participants x %d conditions\n",
             n_distinct(merged$participant_id), nlevels(merged$condition)))
 ```
 
----
+# Step 4 — No-covariate models
 
-# 2. Correlation Analysis
+Formula: `forgetting_pct ~ condition * metric + (1|participant_id)`
 
-LME collapsed across conditions (participant as random effect), plus a
-per-condition simple regression (one observation per participant, so `lm`
-not `lmer`) with Pearson correlation and BH-FDR correction.
+```{r no-cov-models}
+m1_raw <- lmer(forgetting_pct ~ condition * HP_Head_Strength    + (1|participant_id), data = merged)
+m2_raw <- lmer(forgetting_pct ~ condition * HP_Head_Selectivity + (1|participant_id), data = merged)
+m3_raw <- lmer(forgetting_pct ~ condition * HP_Head_Collateral  + (1|participant_id), data = merged)
+```
 
-```{r run_metric_helper}
-run_metric <- function(data, predictor, label) {
+## Kenward-Roger F-tests (no covariate)
 
-  cat("\n", strrep("=", 55), "\n", sep = "")
-  cat("METRIC:", label, "\n")
-  cat(strrep("=", 55), "\n")
+```{r no-cov-anova}
+car::Anova(m1_raw, test.statistic = "F")   # Strength
+car::Anova(m2_raw, test.statistic = "F")   # Selectivity
+car::Anova(m3_raw, test.statistic = "F")   # Collateral
+```
 
-  data[[paste0(predictor, "_z")]] <- scale(data[[predictor]])[, 1]
-  pred_z <- paste0(predictor, "_z")
+# Step 5 — Covariate models
 
-  # LME A: collapsed across conditions
-  m_all <- lmer(as.formula(paste0(
-    "forgetting_pct ~ ", pred_z, " + condition + (1|participant_id)")),
-    data = data, REML = FALSE)
+Formula: `forgetting_pct ~ condition * metric + CueOnlyForgetting + (1|participant_id)`
 
-  cat("\nLME A (collapsed): forgetting ~", label, "+ condition\n")
-  print(summary(m_all)$coefficients)
+Repeats each model above, adding each participant's Cue-only forgetting rate
+as a covariate, to test whether effects are specific to the field metric
+rather than a general tendency to forget more.
 
-  # LM per condition + Pearson correlation
-  cat("\nLM per condition:\n")
-  cor_table <- data.frame()
+```{r cov-models}
+m1 <- lmer(forgetting_pct ~ condition * HP_Head_Strength    + CueOnlyForgetting + (1|participant_id), data = merged)
+m2 <- lmer(forgetting_pct ~ condition * HP_Head_Selectivity + CueOnlyForgetting + (1|participant_id), data = merged)
+m3 <- lmer(forgetting_pct ~ condition * HP_Head_Collateral  + CueOnlyForgetting + (1|participant_id), data = merged)
+```
 
-  for (cond in c("TIS+Cue", "TIS+Cue delayed")) {
-    d_cond <- data %>% filter(condition == cond)
-    m_cond <- lm(as.formula(paste0("forgetting_pct ~ ", pred_z)), data = d_cond)
-    coef_row <- summary(m_cond)$coefficients[pred_z, ]
+## Kenward-Roger F-tests (with covariate)
 
-    cat(sprintf("  %-20s: beta=%.3f, SE=%.3f, t=%.3f, p=%.4f\n",
-                cond, coef_row["Estimate"], coef_row["Std. Error"],
-                coef_row["t value"], coef_row["Pr(>|t|)"]))
+```{r cov-anova}
+car::Anova(m1, test.statistic = "F")   # Strength
+car::Anova(m2, test.statistic = "F")   # Selectivity
+car::Anova(m3, test.statistic = "F")   # Collateral
+```
 
-    x <- d_cond[[predictor]]
-    y <- d_cond$forgetting_pct
-    keep <- !is.na(x) & !is.na(y)
-    r <- cor.test(x[keep], y[keep], method = "pearson")
+# Step 6 — Simple slopes for the Selectivity interaction
 
-    cor_table <- bind_rows(cor_table, data.frame(
-      Metric    = label,
-      Condition = cond,
-      r_pearson = round(r$estimate, 3),
-      p_pearson = round(r$p.value, 4),
-      n         = sum(keep)
-    ))
-  }
+Where a condition x metric interaction is present, `emtrends` gives the
+condition-specific slope (Satterthwaite degrees of freedom).
 
-  # BH-FDR across the conditions tested for this metric
-  cor_table$p_fdr <- round(p.adjust(cor_table$p_pearson, method = "BH"), 4)
-  cor_table$sig <- case_when(
-    cor_table$p_fdr < 0.001 ~ "***",
-    cor_table$p_fdr < 0.01  ~ "**",
-    cor_table$p_fdr < 0.05  ~ "*",
-    cor_table$p_fdr < 0.10  ~ "\u2020",
-    TRUE                    ~ "ns"
-  )
+```{r emtrends}
+trends <- emtrends(m2, ~ condition, var = "HP_Head_Selectivity")
+summary(trends, infer = c(TRUE, TRUE))
 
-  print(cor_table)
+# Test whether the two slopes differ (= the interaction term, reparameterised)
+emtrends(m2, pairwise ~ condition, var = "HP_Head_Selectivity", adjust = "none")
+```
 
-  list(lme = m_all, cor_table = cor_table)
+# Step 7 — Figures
+
+```{r figure-function}
+run_efield_plot <- function(model, predictor, label = predictor) {
+  plot_obj <- interact_plot(
+    model, pred = !!sym(predictor), modx = condition,
+    interval = TRUE, int.type = "confidence", plot.points = TRUE,
+    colors = c(condition_colors["TIS+Cue"], condition_colors["TIS+Cue delayed"]),
+    line.thickness = 2.0,
+    x.label = gsub("_", " ", predictor), y.label = "Forgetting (%)", legend.main = ""
+  ) + theme_nature
+
+  safe_label <- gsub("[^A-Za-z0-9_-]", "_", label)
+  ggsave(file.path(out_dir, paste0(safe_label, "_interaction_plot.svg")),
+         plot_obj, width = 70, height = 60, units = "mm")
+  ggsave(file.path(out_dir, paste0(safe_label, "_interaction_plot.png")),
+         plot_obj, width = 70, height = 60, units = "mm", dpi = 600)
+  print(plot_obj)
 }
-
-cat("Helper defined\n")
 ```
 
-```{r run_head_strength}
-results <- list()
-results$head_str <- run_metric(merged, "HP_Head_Strength", "HP-Head Strength (V/m)")
-
-write.csv(results$head_str$cor_table,
-          file.path(out_dir, "HP_Head_Strength_correlations.csv"),
-          row.names = FALSE)
+```{r figures, fig.width=4, fig.height=3.5}
+run_efield_plot(m1, "HP_Head_Strength",    label = "m1_HP_Head_Strength_covariate")
+run_efield_plot(m2, "HP_Head_Selectivity", label = "m2_HP_Head_Selectivity_covariate")
+run_efield_plot(m3, "HP_Head_Collateral",  label = "m3_HP_Head_Collateral_covariate")
 ```
 
----
+# Summary of results
 
-# 3. Scatter Plots
-
-No on-plot r/p/n annotation — those stats live in the CSV above only,
-to keep the plots clean. Condition colours match `COL_COND` from the
-behavioural analysis notebook, so colours are consistent across the
-behavioural and E-field figures.
-
-```{r fig_efield_behaviour, fig.width=6.4, fig.height=3.2}
-condition_colors <- c(
-  "TIS+Cue"         = "#9B8FD4",
-  "TIS+Cue delayed" = "#4A90D9"
-)
-
-make_scatter <- function(data, predictor, cor_table, xlabel, cond) {
-
-  d <- data %>% filter(condition == cond)
-
-  ggplot(d, aes(x = .data[[predictor]], y = forgetting_pct)) +
-    geom_smooth(method = "lm", se = TRUE,
-                colour = condition_colors[[cond]],
-                fill   = condition_colors[[cond]],
-                alpha  = 0.15, linewidth = 0.8) +
-    geom_point(size = 3, shape = 21,
-               fill = condition_colors[[cond]],
-               colour = "black", stroke = 0.5, alpha = 0.9) +
-    scale_x_continuous(labels = label_number(accuracy = 0.01)) +
-    labs(x = xlabel, y = "Forgetting (%)", title = cond) +
-    theme_classic(base_size = font_size) +
-    theme(
-      plot.title  = element_text(size = font_size + 1, face = "bold", hjust = 0.5),
-      axis.text   = element_text(size = font_size),
-      axis.title  = element_text(size = font_size),
-      axis.line   = element_line(linewidth = 0.3),
-      axis.ticks  = element_line(linewidth = 0.3),
-      plot.margin = margin(2, 2, 2, 2, "mm")
-    )
-}
-
-cor_head_str <- results$head_str$cor_table
-
-p1 <- make_scatter(merged, "HP_Head_Strength", cor_head_str,
-                   "HP-Head Field Strength (V/m)", "TIS+Cue")
-p2 <- make_scatter(merged, "HP_Head_Strength", cor_head_str,
-                   "HP-Head Field Strength (V/m)", "TIS+Cue delayed")
-
-combined <- (p1 | p2)
-print(combined)
-
-# Combined 2-panel figure, sized to match the behavioural notebook's
-# combined-figure width
-ggsave(file.path(out_dir, "fig_efield_behaviour.png"),
-       combined, width = 6.4, height = 3.2, dpi = 600)
-ggsave(file.path(out_dir, "fig_efield_behaviour.pdf"),
-       combined, width = 6.4, height = 3.2, device = cairo_pdf)
-ggsave(file.path(out_dir, "fig_efield_behaviour.svg"),
-       combined, width = 6.4, height = 3.2, device = "svg")
-
-# Individual panels, 3.2 x 3.2 in, matching the behavioural notebook's figures
-ggsave(file.path(out_dir, "scatter_TISCue.png"),
-       p1, width = 3.2, height = 3.2, dpi = 600)
-ggsave(file.path(out_dir, "scatter_TISCue.pdf"),
-       p1, width = 3.2, height = 3.2, device = cairo_pdf)
-ggsave(file.path(out_dir, "scatter_TISCue.svg"),
-       p1, width = 3.2, height = 3.2, device = "svg")
-
-ggsave(file.path(out_dir, "scatter_TISCue_delayed.png"),
-       p2, width = 3.2, height = 3.2, dpi = 600)
-ggsave(file.path(out_dir, "scatter_TISCue_delayed.pdf"),
-       p2, width = 3.2, height = 3.2, device = cairo_pdf)
-ggsave(file.path(out_dir, "scatter_TISCue_delayed.svg"),
-       p2, width = 3.2, height = 3.2, device = "svg")
-
-cat("Saved combined (6.4 x 3.2 in) and individual (3.2 x 3.2 in) panels to:\n")
-cat(out_dir, "\n")
-```
-
----
-
-# 4. Session Information
-
-```{r session_info}
-sessionInfo()
-```
