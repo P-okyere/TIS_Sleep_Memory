@@ -26,7 +26,7 @@ sleep_stages_use = {'N2','N3'};
 spindle_types    = {'fast'};
 freq_labels      = struct('fast','12–16 Hz');
 
-% Cluster permutation settings — matches Chapter 4 exactly
+% Cluster permutation settings
 n_perm           = 1000;
 cluster_alpha    = 0.05;
 cluster_p_thresh = 0.05;
@@ -39,7 +39,7 @@ load(fullfile(bids_deriv, 'spindle_so_detection', 'desc-fastSpindleMetrics_trial
      'all_trial_data');
 
 %% ============================
-%  EEG LAYOUT 
+%  EEG LAYOUT
 %% ============================
 example_EEG = pop_loadset('filename', 'sub-41_task-nap_eeg.set', ...
                           'filepath', fullfile(base_path_eeg, 'sub-41', 'eeg'));
