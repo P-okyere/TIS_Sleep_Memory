@@ -3,10 +3,11 @@ clear; clc; close all;
 %% ============================
 %  EDIT FOR YOUR ENVIRONMENT
 %% ============================
-base_path      = '/path/to/MYSTI';
-base_path_eeg  = '/path/to/MYSTI/eeg';
-out_path       = fullfile(base_path, 'derivatives', 'SO_amplitude_stats');
-batlow_path    = '/path/to/ScientificColourMaps8/batlow';
+bids_root      = 'E:\BIDS';
+bids_deriv     = fullfile(bids_root, 'derivatives');
+base_path_eeg  = bids_root;
+out_path       = fullfile(bids_deriv, 'SO_amplitude_stats');
+batlow_path    = 'C:\Users\po00240\OneDrive - University of Surrey\Desktop\Projects\MYSTI\_matlab_scripts (1)_first\Stats\ScientificColourMaps8\batlow';
 % ============================
 
 %% ============================
@@ -21,7 +22,7 @@ marker_labels_map = struct( ...
 
 sleep_stages_use = {'N2','N3'};
 
-% Cluster permutation settings — matches Chapter 4 exactly
+% Cluster permutation settings
 n_perm           = 1000;
 cluster_alpha    = 0.05;
 cluster_p_thresh = 0.05;
@@ -37,13 +38,13 @@ if ~exist(plot_dir_null,'dir'),      mkdir(plot_dir_null);      end
 %% ============================
 %  LOAD DATA
 %% ============================
-load(fullfile(base_path,'trial_slowwave_all_conditions_clean3.5s.mat'), ...
+load(fullfile(bids_deriv, 'spindle_so_detection', 'desc-SOMetrics_trialdata.mat'), ...
      'all_so_trial_data');
 
 %% ============================
-%  EEG LAYOUT — matches Chapter 4 exactly
+%  EEG LAYOUT
 %% ============================
-example_EEG = pop_loadset('filename', 'sub-41_task-nap_eeg_with_all_spindles.set', ...
+example_EEG = pop_loadset('filename', 'sub-41_task-nap_eeg.set', ...
                           'filepath', fullfile(base_path_eeg, 'sub-41', 'eeg'));
 ft_data     = eeglab2fieldtrip(example_EEG, 'preprocessing', 'none');
 
@@ -83,7 +84,7 @@ channels   = ft_data.label;
 n_channels = numel(channels);
 
 %% ============================
-%  NEIGHBOUR STRUCTURE — matches Chapter 4
+%  NEIGHBOUR STRUCTURE
 %% ============================
 cfg_neigh        = [];
 cfg_neigh.method = 'triangulation';
@@ -143,7 +144,7 @@ col_sig    = [1.0 1.0 1.0];   % white = significant cluster
 col_nonsig = [0.6 0.6 0.6];   % grey  = not significant
 
 %% ============================
-%  FIGURE SIZE — matches spindle topoplot scripts
+%  FIGURE SIZE
 %% ============================
 font_size  = 4;
 font_name  = 'Arial';
@@ -332,7 +333,6 @@ cfg.interplim = 'head';
 cfg.colorbar  = 'yes';
 cfg.zlim = [0 10];
 ft_topoplotER(cfg, data);
-% ft_topoplotER(cfg, data);
 
 h = colorbar;
 ylabel(h, 'F value', 'FontSize', font_size);
@@ -355,11 +355,11 @@ for j = 1:numel(layout.label)
 end
 hold off;
 
-    title({'SO amplitude', ...
-           }, ...
-          'FontSize', font_size, 'FontWeight', 'normal', ...
-          'FontName', font_name, ...
-          'Units', 'normalized', 'Position', title_pos);
+title({'SO amplitude', ...
+       }, ...
+      'FontSize', font_size, 'FontWeight', 'normal', ...
+      'FontName', font_name, ...
+      'Units', 'normalized', 'Position', title_pos);
 
 ax = gca; ax.FontSize = font_size; ax.FontName = font_name;
 
