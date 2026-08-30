@@ -3,15 +3,16 @@ clear; clc; close all;
 %% ============================
 %  EDIT FOR YOUR ENVIRONMENT
 %% ============================
-base_path = '/path/to/MYSTI';
+bids_root  = 'E:\BIDS';
+bids_deriv = fullfile(bids_root, 'derivatives');
 
 % Must match out_path/topoplot_significant from
 % SO_ptp_cluster_permutation_stats.m, and fname must match its 'fname'
 % variable - this is where that script saved <fname>_sig_channels_clusterN.csv
-stats_dir = fullfile(base_path, 'derivatives', 'SO_amplitude_stats', 'topoplot_significant');
+stats_dir = fullfile(bids_deriv, 'SO_amplitude_stats', 'topoplot_significant');
 stats_fname_prefix = 'SO_PTP_ANOVA_clusterperm';
 
-output_folder = fullfile(base_path, 'derivatives', 'SO_amplitude_stats', 'barplots');
+output_folder = fullfile(bids_deriv, 'SO_amplitude_stats', 'barplots');
 
 if ~exist(output_folder,'dir'), mkdir(output_folder); end
 % ============================
@@ -21,8 +22,7 @@ if ~exist(output_folder,'dir'), mkdir(output_folder); end
 %% ============================
 % Loads <stats_fname_prefix>_sig_channels_cluster1.csv, _cluster2.csv, ...
 % saved by SO_ptp_cluster_permutation_stats.m — no channel lists are
-% hardcoded here. As of the last run this analysis found a single
-% significant cluster, but this script handles however many are found.
+% hardcoded here. Handles however many clusters are found.
 cluster_files = dir(fullfile(stats_dir, [stats_fname_prefix '_sig_channels_cluster*.csv']));
 if isempty(cluster_files)
     error('No significant cluster files found in %s. Run SO_ptp_cluster_permutation_stats.m first.', stats_dir);
@@ -63,7 +63,7 @@ n_panels = numel(all_chan_sets);
 %% ============================
 %  LOAD DATA
 %% ============================
-load(fullfile(base_path,'trial_slowwave_all_conditions_clean3.5s.mat'), ...
+load(fullfile(bids_deriv, 'spindle_so_detection', 'desc-SOMetrics_trialdata.mat'), ...
      'all_so_trial_data');
 
 %% ============================
