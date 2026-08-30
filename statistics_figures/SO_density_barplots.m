@@ -3,16 +3,17 @@ clear; clc; close all;
 %% ============================
 %  EDIT FOR YOUR ENVIRONMENT
 %% ============================
-base_path = '/path/to/MYSTI';
+bids_root  = 'E:\BIDS';
+bids_deriv = fullfile(bids_root, 'derivatives');
 
 % Must match out_root/topoplot_significant from
 % SO_density_cluster_permutation_stats.m, and fname must match its
 % 'fname' variable - this is where that script saved
 % <fname>_sig_channels_clusterN.csv
-stats_dir = fullfile(base_path, 'derivatives', 'SO_density_stats', 'topoplot_significant');
+stats_dir = fullfile(bids_deriv, 'SO_density_stats', 'topoplot_significant');
 stats_fname_prefix = 'SO_density_Gamma_posonly_clusterperm';
 
-output_folder = fullfile(base_path, 'derivatives', 'SO_density_stats', 'barplots');
+output_folder = fullfile(bids_deriv, 'SO_density_stats', 'barplots');
 
 if ~exist(output_folder,'dir'), mkdir(output_folder); end
 % ============================
@@ -41,7 +42,7 @@ fprintf('Loaded %d significant channels across %d cluster(s)\n', ...
 %% ============================
 %  LOAD DATA
 %% ============================
-load(fullfile(base_path,'trial_slowwave_all_conditions_clean3.5s.mat'), ...
+load(fullfile(bids_deriv, 'spindle_so_detection', 'desc-SOMetrics_trialdata.mat'), ...
      'all_so_trial_data');
 
 %% ============================
