@@ -18,12 +18,15 @@ rng(42);
 %% ========================================================================
 
 %% -------- EDIT FOR YOUR ENVIRONMENT --------
-mysti_path    = '/path/to/MYSTI';
-eeglab_path   = '/path/to/eeglab';
-behavior_file = '/path/to/FamRecFid_Tables/MYSTI_FamRecFid_V2_NAkept.xlsx';
-results_file  = fullfile(mysti_path, 'EField_CouplingRate_3cond', 'Results_CouplingRate_3cond.mat');
+eeglab_path   = 'C:\Users\po00240\OneDrive - University of Surrey\Desktop\eeglab';
+colourmap_path = 'C:\Users\po00240\OneDrive - University of Surrey\Desktop\Projects\MYSTI\ScientificColourMaps8';
+bids_root     = 'E:\BIDS';
+bids_deriv    = fullfile(bids_root, 'derivatives');
 
-out_dir = fullfile(mysti_path, 'derivatives', 'coupling_rate_forgetting_stats');
+behavior_file = fullfile(bids_deriv, 'behaviour', 'desc-FamRecFidSummary_results.xlsx');
+results_file  = fullfile(bids_deriv, 'so_spindle_coupling', 'desc-SOSpindleCouplingRate_metrics.mat');
+
+out_dir = fullfile(bids_deriv, 'coupling_rate_forgetting_stats');
 if ~exist(out_dir,'dir'), mkdir(out_dir); end
 fprintf('Output: %s\n\n', out_dir);
 % --------------------------------------------
@@ -53,8 +56,8 @@ fprintf('Loading EEG layout...\n');
 addpath(eeglab_path);
 eeglab nogui;
 
-eeg_path = fullfile(mysti_path, 'eeg');
-EEG      = pop_loadset('filename','sub-41_task-nap_eeg_with_all_spindles.set','filepath',eeg_path);
+eeg_path = fullfile(bids_root, 'sub-41', 'eeg');
+EEG      = pop_loadset('filename','sub-41_task-nap_eeg.set','filepath',eeg_path);
 ft_data  = eeglab2fieldtrip(EEG,'preprocessing','none');
 
 cfg_layout        = [];
@@ -66,7 +69,7 @@ layout     = add_missing_channels(layout);
 neighbours = build_neighbours();
 
 %% -------- COLORMAP --------
-addpath(genpath(fullfile(mysti_path,'ScientificColourMaps8')));
+addpath(genpath(colourmap_path));
 if exist('batlow.mat','file'), load('batlow.mat'); cmap = batlow;
 else, cmap = parula(256); end
 
