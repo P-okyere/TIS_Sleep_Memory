@@ -26,7 +26,7 @@ sleep_stages_use = {'N2','N3'};
 spindle_types    = {'slow'};
 freq_labels      = struct('slow','10–12 Hz');
 
-% Cluster permutation settings — matches Chapter 4 exactly
+% Cluster permutation settings
 n_perm           = 1000;
 cluster_alpha    = 0.05;   % channel-level threshold for cluster forming
 cluster_p_thresh = 0.05;   % cluster significance threshold
@@ -39,7 +39,7 @@ load(fullfile(bids_deriv, 'spindle_so_detection', 'desc-slowSpindleMetrics_trial
      'all_trial_data');
 
 %% ============================
-%  EEG LAYOUT 
+%  EEG LAYOUT
 %% ============================
 example_EEG = pop_loadset('filename', 'sub-41_task-nap_eeg.set', ...
                           'filepath', fullfile(base_path_eeg, 'sub-41', 'eeg'));
@@ -51,7 +51,7 @@ cfg_layout.layout = 'acticap-64ch-standard2.mat';
 cfg_layout.rotate = 0;
 layout            = ft_prepare_layout(cfg_layout);
 
-%% === Add missing channels to layout (matches Chapter 4) ===
+%% === Add missing channels to layout ===
 AFz_pos = mean([
     layout.pos(strcmp(layout.label, 'Fz'),  :);
     layout.pos(strcmp(layout.label, 'AF3'), :);
@@ -72,7 +72,7 @@ layout.pos    = [layout.pos;    new_pos];
 layout.width  = [layout.width;  repmat(mean(layout.width),  4, 1)];
 layout.height = [layout.height; repmat(mean(layout.height), 4, 1)];
 
-%% === Rescale electrode positions inward (matches Chapter 4) ===
+%% === Rescale electrode positions inward ===
 scale_factor = 0.85;
 center       = mean(layout.pos, 1);
 layout.pos   = center + scale_factor * (layout.pos - center);
@@ -104,7 +104,7 @@ idx = idx + 1;
 neighbours(idx).label       = 'I2';
 neighbours(idx).neighblabel = {'O2','PO8','PO4','Oz'};
 
-% Bidirectional links (matches Chapter 4)
+% Bidirectional links
 new_chans = {'AFz','FCz','I1','I2'};
 new_neighs = {
     {'Fz','AF3','AF4','F1','F2'}, ...
@@ -141,7 +141,7 @@ addpath(batlow_path);
 load('batlow.mat');
 
 %% ============================
-%  DOT COLOURS — matches Chapter 4
+%  DOT COLOURS
 %% ============================
 col_sig    = [1.0 1.0 1.0];   % white = significant cluster
 col_nonsig = [0.6 0.6 0.6];   % grey  = not significant
@@ -188,6 +188,7 @@ for s = 1:numel(spindle_types)
 
     %% ====================================================
     %  STEP 1 — Observed F values (channel-wise LME)
+    %  Same LME as original script — not changed
     %% ====================================================
     fvals_obs = nan(n_channels, 1);
     pvals_obs = nan(n_channels, 1);
@@ -213,6 +214,8 @@ for s = 1:numel(spindle_types)
 
     %% ====================================================
     %  STEP 2 — Participant-level condition means
+    %  Shape: nP x n_channels x n_conds
+    %  avg_cond per participant per channel
     %% ====================================================
     n_conds   = numel(marker_set);
     sub_means = nan(nP, n_channels, n_conds);
@@ -232,7 +235,7 @@ for s = 1:numel(spindle_types)
     end
 
     %% ====================================================
-    %  STEP 3 — Observed clusters
+    %  STEP 3 — Observed clusters (positive only — F is always positive)
     %% ====================================================
     sig_mask_obs = pvals_obs < cluster_alpha & ~isnan(fvals_obs);
 
@@ -244,6 +247,11 @@ for s = 1:numel(spindle_types)
 
     %% ====================================================
     %  STEP 4 — Permutation using sign-flip on condition means
+    %  Same approach used across all spindle types:
+    %  - compute participant difference across conditions
+    %  - randomly flip sign per participant
+    %  - ttest across participants per channel
+    %  - find max cluster mass under H0
     %% ====================================================
     fprintf('Running %d permutations...\n', n_perm);
     perm_max_mass = nan(n_perm, 1);
@@ -257,7 +265,7 @@ for s = 1:numel(spindle_types)
         end
 
         % For 3 conditions: use overall mean deviation per participant
-        % Sign-flip the deviation from grand mean — same logic as Chapter 4
+        % Sign-flip the deviation from grand mean
         fvals_perm = nan(n_channels, 1);
         pvals_perm = nan(n_channels, 1);
 
@@ -268,7 +276,7 @@ for s = 1:numel(spindle_types)
             n     = size(Y,1);
             if n < 5, continue; end
 
-            % Sign-flip within participant (matches Chapter 4 logic)
+            % Sign-flip within participant
             flip   = (rand(n,1) > 0.5) * 2 - 1;  % +1 or -1 per participant
             Y_flip = Y .* flip;                    % flip all conditions together
 
@@ -301,6 +309,7 @@ for s = 1:numel(spindle_types)
 
     %% ====================================================
     %  STEP 5 — Test each cluster against null distribution
+    %  Same approach used across all spindle types
     %% ====================================================
     all_sig_channels = {};
     n_sig            = 0;
@@ -467,7 +476,8 @@ fprintf('\n✅ All done.\n');
 
 
 %% ============================
-%  HELPER FUNCTIOn
+%  HELPER FUNCTION
+%  Cluster-finding helper (same logic used across all topoplot scripts)
 %% ============================
 function [clusters, masses] = find_all_clusters(tvals, sig_mask, channels, neighbours, min_size)
     clusters = {};
