@@ -3,10 +3,11 @@ clear; clc; close all;
 %% ============================
 %  EDIT FOR YOUR ENVIRONMENT
 %% ============================
-base_path      = '/path/to/MYSTI';
-base_path_eeg  = '/path/to/MYSTI/eeg';
-out_root       = fullfile(base_path, 'derivatives', 'SO_density_stats');
-batlow_path    = '/path/to/ScientificColourMaps8/batlow';
+bids_root      = 'E:\BIDS';
+bids_deriv     = fullfile(bids_root, 'derivatives');
+base_path_eeg  = bids_root;
+out_root       = fullfile(bids_deriv, 'SO_density_stats');
+batlow_path    = 'C:\Users\po00240\OneDrive - University of Surrey\Desktop\Projects\MYSTI\_matlab_scripts (1)_first\Stats\ScientificColourMaps8\batlow';
 % ============================
 
 %% ============================
@@ -36,14 +37,16 @@ if ~exist(plot_dir_null,'dir'),      mkdir(plot_dir_null);      end
 
 %% ============================
 %  LOAD DATA
+%  Same combined SO table as the amplitude script - this one just uses
+%  the Density column instead of MeanPTP.
 %% ============================
-load(fullfile(base_path,'trial_slowwave_all_conditions_clean3.5s.mat'), ...
+load(fullfile(bids_deriv, 'spindle_so_detection', 'desc-SOMetrics_trialdata.mat'), ...
      'all_so_trial_data');
 
 %% ============================
 %  EEG LAYOUT
 %% ============================
-example_EEG = pop_loadset('filename', 'sub-41_task-nap_eeg_with_all_spindles.set', ...
+example_EEG = pop_loadset('filename', 'sub-41_task-nap_eeg.set', ...
                           'filepath', fullfile(base_path_eeg, 'sub-41', 'eeg'));
 ft_data     = eeglab2fieldtrip(example_EEG, 'preprocessing', 'none');
 
