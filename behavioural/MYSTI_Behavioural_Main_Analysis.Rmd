@@ -37,7 +37,7 @@ required_packages <- c(
   "readxl", "writexl", "dplyr", "tidyr",
   "lme4", "lmerTest", "emmeans", "car",
   "ggplot2", "scales", "patchwork",
-  "knitr", "kableExtra", "ordinal",
+  "knitr", "kableExtra",
   "svglite",  # needed for ggsave(..., device = "svg")
   "DHARMa"    # simulated-residual diagnostics for the GLMMs/LMM below
 )
@@ -51,11 +51,11 @@ cat("All packages loaded\n")
 
 ```{r config}
 # ==== EDIT FOR YOUR ENVIRONMENT ====
-BASE_PATH    <- "/path/to/MYSTI/Wake_behavior_data"
+BASE_PATH    <- "E:/BIDS/derivatives/behaviour"
 # ====================================
 
-PRE_FILE     <- file.path(BASE_PATH, "Participants_pre_data_transcribed_corrected.xlsx")
-POST_FILE    <- file.path(BASE_PATH, "Participants_post_data_transcribed_corrected.xlsx")
+PRE_FILE     <- file.path(BASE_PATH, "desc-preNapBehaviour_trialdata.xlsx")
+POST_FILE    <- file.path(BASE_PATH, "desc-postNapBehaviour_trialdata.xlsx")
 FIG_DIR      <- file.path(BASE_PATH, "Figures")
 TABLE_DIR    <- file.path(BASE_PATH, "Tables")
 SUPP_FIG_DIR <- file.path(BASE_PATH, "Supplementary", "Figures2")
@@ -79,24 +79,13 @@ COL_COND <- c(
 
 numify <- function(x) suppressWarnings(as.numeric(as.character(x)))
 
-# NOTE: bracket spacing tightened (pp_max + 1 + 2.5*n instead of + 3 + 5*n)
-# per Valeria's comment - brackets were taking up too much vertical space
-# and sitting too far from the data.
-#
-# NOTE: tier assignment is now overlap-aware. Previously every bracket got
-# the next sequential tier regardless of whether it actually crossed any
-# other bracket's x-range - this pushed non-overlapping pairs (e.g.
-# TIS+Cue vs TIS+Cue delayed, and Cue vs Non-Cue, which don't share any
-# x-position) to different heights for no reason. Now a bracket only moves
-# up a tier if its x-range actually overlaps a bracket already placed at
-# the current tier.
+
 assign_bracket_tiers <- function(df) {
   df <- df %>% arrange(abs(x2 - x1))
   tiers <- integer(nrow(df))
-  tier_ranges <- list()  # tier_ranges[[tier]] = list of c(xmin,xmax) already placed
+  tier_ranges <- list()  # 
 
-  # Safe accessor: list()[[idx]] errors when idx exceeds current length
-  # (unlike vectors, which return NA) - this avoids that error.
+
   safe_get <- function(lst, idx) if (idx <= length(lst)) lst[[idx]] else NULL
 
   for (i in seq_len(nrow(df))) {
@@ -145,9 +134,8 @@ get_sig_pairs_gated <- function(pair_df, cond_levels, pp_max, omnibus_p) {
 
 # DHARMa simulated-residual diagnostics, run after every GLMM/LMM fit below.
 # Reports dispersion, uniformity (KS), and outlier tests, plus the standard
-# QQ / residual-vs-predicted plot. Note: DHARMa does not support `clmm`
-# (ordinal package) objects, so the CLMM fidelity model in Section 7b.1 is
-# not run through this helper - see the note there.
+# QQ / residual-vs-predicted plot. 
+
 check_glmm_assumptions <- function(model, label) {
   cat(sprintf("\n%s\n", strrep("=", 60)))
   cat(sprintf("DHARMa diagnostics: %s\n", label))
@@ -430,7 +418,6 @@ p_familiarity <- ggplot() +
   geom_line(data = pp_familiarity,
             aes(x = as.numeric(Condition_f), y = rate, group = sub),
             colour = "grey65", linewidth = 0.45, alpha = 0.65) +
-  # Data point size reduced per Derk-Jan's comment (size 2.2 -> 1.4, stroke 0.6 -> 0.5)
   geom_point(data = pp_familiarity,
              aes(x = Condition_f, y = rate, fill = Condition_f),
              shape = 21, size = 1.4, stroke = 0.5, colour = "black", alpha = 0.85,
@@ -512,10 +499,6 @@ sig_rec <- get_sig_pairs_gated(pair_rec, COND_LEVELS,
                                max(pp_recollection$rate,na.rm=TRUE),
                                rec_anova$`Pr(>Chisq)`[1])
 
-# Compute how much headroom the stacked brackets actually need, so the
-# visible panel range comfortably fits all of them (previously,
-# scale_y_continuous(limits=...) silently DELETED any bracket whose y_bar
-# exceeded 50, which is why only the lowest bracket survived).
 n_sig_rec   <- nrow(sig_rec)
 bracket_top <- if (n_sig_rec > 0) max(sig_rec$y_bar) + 3 else max(pp_recollection$rate, na.rm=TRUE) + 5
 
@@ -526,7 +509,6 @@ p_recollection <- ggplot() +
                 width=0.15, linewidth=0.8, colour="black") +
   geom_line(data=pp_recollection, aes(x=as.numeric(Condition_f),y=rate,group=sub),
             colour="grey65", linewidth=0.45, alpha=0.65) +
-  # Data point size reduced per Derk-Jan's comment (size 2.2 -> 1.4, stroke 0.6 -> 0.5)
   geom_point(data=pp_recollection, aes(x=Condition_f,y=rate,fill=Condition_f),
              shape=21, size=1.4, stroke=0.5, colour="black", alpha=0.85,
              position=position_jitter(width=0.06,seed=123,height=0)) +
@@ -541,9 +523,6 @@ p_recollection <- ggplot() +
                 size=5, inherit.aes=FALSE)
   )} +
   scale_fill_manual(values=COL_COND) +
-  # Per Valeria's comment: axis LABELS still stop at 50% (visual impression
-  # she asked for), but the actual panel range (via coord_cartesian below)
-  # extends far enough to fit all significance brackets without deleting them.
   scale_y_continuous(labels=percent_format(accuracy=1,scale=1),
                      breaks=seq(0,50,10)) +
   coord_cartesian(ylim = c(0, bracket_top), clip = "off") +
@@ -565,254 +544,7 @@ cat("Recollection figure saved.\n")
 
 ---
 
-# 7. Fidelity — Binary (original)
-
-```{r fidelity_glmm}
-m_fid <- glmer(fid_forgetting ~ Condition_f + (1 | sub),
-               data = matched_fid, family = binomial,
-               control = glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 2e5)))
-
-cat("=== Fidelity GLMM ===\n")
-fid_anova <- Anova(m_fid, type = "II")
-print(fid_anova)
-
-emm_fid  <- emmeans(m_fid, ~ Condition_f, type = "response")
-pair_fid <- contrast(emm_fid, method = "pairwise", adjust = "none")
-print(emm_fid)
-print(summary(pair_fid))
-
-pair_fid_logit <- contrast(emmeans(m_fid, ~ Condition_f),
-                            method = "pairwise", adjust = "none")
-print(summary(pair_fid_logit))
-```
-
-```{r diag_m_fid, fig.width=8, fig.height=4}
-check_glmm_assumptions(m_fid, "Fidelity - binary (m_fid)")
-```
-
-```{r fig_fidelity}
-emm_fid_df <- as.data.frame(emm_fid) %>%
-  mutate(rate_pct=prob*100, lo_pct=asymp.LCL*100, hi_pct=asymp.UCL*100)
-
-pp_fidelity <- matched_fid %>%
-  group_by(sub, Condition_f) %>%
-  summarise(rate=mean(fid_forgetting,na.rm=TRUE)*100, .groups="drop")
-
-p_fidelity <- ggplot() +
-  geom_col(data=emm_fid_df, aes(x=Condition_f,y=rate_pct,fill=Condition_f),
-           width=0.7, colour=NA) +
-  geom_errorbar(data=emm_fid_df, aes(x=Condition_f,ymin=lo_pct,ymax=hi_pct),
-                width=0.15, linewidth=0.8, colour="black") +
-  geom_line(data=pp_fidelity, aes(x=as.numeric(Condition_f),y=rate,group=sub),
-            colour="grey65", linewidth=0.45, alpha=0.65) +
-  # Data point size reduced per Derk-Jan's comment (size 2.2 -> 1.4, stroke 0.6 -> 0.5)
-  geom_point(data=pp_fidelity, aes(x=Condition_f,y=rate,fill=Condition_f),
-             shape=21, size=1.4, stroke=0.5, colour="black", alpha=0.85,
-             position=position_jitter(width=0.06,seed=123,height=0)) +
-  scale_fill_manual(values=COL_COND) +
-  scale_y_continuous(labels=percent_format(accuracy=1,scale=1),
-                     expand=expansion(mult=c(0,0.2)), limits=c(0,NA)) +
-  labs(x=NULL, y="Fidelity Forgetting (%)") +
-  theme_classic(base_size=8) +
-  theme(legend.position="none",
-        axis.line=element_line(linewidth=0.8,colour="black"),
-        axis.text.x=element_text(size=8,colour="black",angle=30,hjust=1),
-        axis.text.y=element_text(size=8,colour="black"),
-        axis.title=element_text(size=8,colour="black"),
-        plot.margin=margin(10,10,15,10)) +
-  coord_cartesian(clip="off")
-
-print(p_fidelity)
-ggsave(file.path(FIG_DIR,"Fig_6_Fidelity.png"), p_fidelity, width=3.2, height=3.5, dpi=600)
-ggsave(file.path(FIG_DIR,"Fig_6_Fidelity.pdf"), p_fidelity, width=3.2, height=3.5, device=cairo_pdf)
-ggsave(file.path(FIG_DIR,"Fig_6_Fidelity.svg"), p_fidelity, width=3.2, height=3.5, device="svg")
-cat("Fidelity figure saved.\n")
-```
-
----
-
-# 7b. Fidelity — Ordinal & Recoded Analyses
-
-## 7b.1 Cumulative-Link Mixed Model (CLMM) on raw 0–3 scores
-
-```{r fidelity_clmm}
-matched_ord <- matched %>%
-  filter(!is.na(post_img_selection), !is.na(post_scale)) %>%
-  mutate(fidelity_score = factor(post_scale, levels = 0:3, ordered = TRUE))
-
-cat(sprintf("Items for ordinal analysis: %d\n", nrow(matched_ord)))
-
-m_clmm <- clmm(fidelity_score ~ Condition_f + (1 | sub),
-               data = matched_ord, link = "logit", threshold = "flexible")
-
-m_clmm_null <- clmm(fidelity_score ~ 1 + (1 | sub),
-                    data = matched_ord, link = "logit", threshold = "flexible")
-
-cat("\n=== CLMM Summary ===\n")
-print(summary(m_clmm))
-
-cat("\n=== Likelihood Ratio Test ===\n")
-lrt <- anova(m_clmm_null, m_clmm)
-print(lrt)
-
-cat("\n=== Pairwise comparisons ===\n")
-emm_ord  <- emmeans(m_clmm, ~ Condition_f, mode = "linear.predictor")
-pair_ord <- contrast(emm_ord, method = "pairwise", adjust = "none")
-print(summary(pair_ord))
-```
-
-```{r diag_m_clmm_note, results='asis'}
-cat("**Note on assumption checks for m_clmm:** DHARMa's `simulateResiduals()` ",
-    "does not support `clmm` objects from the `ordinal` package (only lm, ",
-    "glm, lme4, glmmTMB, GLMMadaptive, and a few others are supported), so ",
-    "the same diagnostic battery used for the binomial GLMMs above cannot ",
-    "be run on this model directly. As a partial check, the recoded binary ",
-    "version of this outcome (Section 7b.3, `m_fid2`) covers the same data ",
-    "with a `glmer` model that DOES get full DHARMa diagnostics below - ",
-    "convergence and consistency between `m_clmm` and `m_fid2` is one way ",
-    "to gain some assurance the ordinal model's conclusions aren't an ",
-    "artefact of a violated assumption.\n")
-```
-
-## 7b.2 Stacked bar plot — ordinal score distribution
-
-```{r fig_fidelity_ordinal}
-prop_df <- matched_ord %>%
-  count(Condition_f, fidelity_score) %>%
-  group_by(Condition_f) %>%
-  mutate(prop = n / sum(n) * 100) %>%
-  ungroup() %>%
-  mutate(score_label = factor(fidelity_score,
-                              levels = c(3, 2, 1, 0),
-                              labels = c("3 — Accurate detail",
-                                         "2 — Correct category",
-                                         "1 — Related/confused",
-                                         "0 — No recall")))
-
-score_colours <- c(
-  "3 — Accurate detail"  = "#2C7BB6",
-  "2 — Correct category" = "#ABD9E9",
-  "1 — Related/confused" = "#FDAE61",
-  "0 — No recall"        = "#D7191C"
-)
-
-p_ord <- ggplot(prop_df, aes(x = Condition_f, y = prop, fill = score_label)) +
-  geom_col(width = 0.7, colour = "white", linewidth = 0.3) +
-  scale_fill_manual(values = score_colours, name = "Fidelity score") +
-  scale_y_continuous(labels = percent_format(accuracy=1,scale=1),
-                     expand = expansion(mult=c(0,0.02))) +
-  labs(x = NULL, y = "Proportion of items (%)") +
-  theme_classic(base_size = 8) +
-  theme(legend.position="right",
-        legend.title=element_text(size=8,face="bold"),
-        legend.text=element_text(size=7),
-        axis.line=element_line(linewidth=0.4,colour="black"),
-        axis.text.x=element_text(size=8,colour="black",angle=30,hjust=1),
-        axis.text.y=element_text(size=8,colour="black"),
-        axis.title=element_text(size=8,colour="black"),
-        plot.margin=margin(10,10,15,10))
-
-print(p_ord)
-ggsave(file.path(FIG_DIR,"Fig_6b_Fidelity_OrdinalStacked.png"), p_ord, width=3.5, height=3.2, dpi=600)
-ggsave(file.path(FIG_DIR,"Fig_6b_Fidelity_OrdinalStacked.pdf"), p_ord, width=3.5, height=3.2, device=cairo_pdf)
-ggsave(file.path(FIG_DIR,"Fig_6b_Fidelity_OrdinalStacked.svg"), p_ord, width=3.5, height=3.2, device="svg")
-cat("Ordinal stacked bar saved.\n")
-```
-
-## 7b.3 Recoded binary: 0+1 = forgetting, 2+3 = retained
-
-```{r fidelity_recoded}
-matched_fid2 <- matched %>%
-  filter(!is.na(post_scale)) %>%
-  mutate(
-    fid2_retained   = as.integer(post_scale >= 2),
-    fid2_forgetting = as.integer(post_scale < 2)
-  )
-
-cat(sprintf("Fidelity recoded items: %d\n", nrow(matched_fid2)))
-matched_fid2 %>%
-  group_by(Condition_f) %>%
-  summarise(N=n(),
-            Retained_pct=round(mean(fid2_retained)*100,1),
-            Forgetting_pct=round(mean(fid2_forgetting)*100,1), .groups="drop") %>%
-  print()
-
-m_fid2 <- glmer(fid2_forgetting ~ Condition_f + (1 | sub),
-                data = matched_fid2, family = binomial,
-                control = glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 2e5)))
-
-cat("\n=== Fidelity Recoded GLMM ===\n")
-fid2_anova <- Anova(m_fid2, type = "II")
-print(fid2_anova)
-
-emm_fid2  <- emmeans(m_fid2, ~ Condition_f, type = "response")
-pair_fid2 <- contrast(emm_fid2, method = "pairwise", adjust = "none")
-print(emm_fid2)
-print(summary(pair_fid2))
-
-pair_fid2_logit <- contrast(emmeans(m_fid2, ~ Condition_f),
-                             method = "pairwise", adjust = "none")
-print(summary(pair_fid2_logit))
-```
-
-```{r diag_m_fid2, fig.width=8, fig.height=4}
-check_glmm_assumptions(m_fid2, "Fidelity - recoded binary (m_fid2)")
-```
-
-```{r fig_fidelity_recoded}
-emm_fid2_df <- as.data.frame(emm_fid2) %>%
-  mutate(rate_pct=prob*100, lo_pct=asymp.LCL*100, hi_pct=asymp.UCL*100)
-
-pp_fid2 <- matched_fid2 %>%
-  group_by(sub, Condition_f) %>%
-  summarise(rate=mean(fid2_forgetting,na.rm=TRUE)*100, .groups="drop")
-
-sig_fid2 <- get_sig_pairs_gated(pair_fid2, COND_LEVELS,
-                                max(pp_fid2$rate,na.rm=TRUE),
-                                fid2_anova$`Pr(>Chisq)`[1])
-
-p_fid2 <- ggplot() +
-  geom_col(data=emm_fid2_df, aes(x=Condition_f,y=rate_pct,fill=Condition_f),
-           width=0.7, colour=NA) +
-  geom_errorbar(data=emm_fid2_df, aes(x=Condition_f,ymin=lo_pct,ymax=hi_pct),
-                width=0.15, linewidth=0.8, colour="black") +
-  geom_line(data=pp_fid2, aes(x=as.numeric(Condition_f),y=rate,group=sub),
-            colour="grey65", linewidth=0.45, alpha=0.65) +
-  # Data point size reduced per Derk-Jan's comment (size 2.2 -> 1.4, stroke 0.6 -> 0.5)
-  geom_point(data=pp_fid2, aes(x=Condition_f,y=rate,fill=Condition_f),
-             shape=21, size=1.4, stroke=0.5, colour="black", alpha=0.85,
-             position=position_jitter(width=0.06,seed=123,height=0)) +
-  { if (nrow(sig_fid2) > 0) list(
-      geom_segment(data=sig_fid2, aes(x=x1,xend=x2,y=y_bar,yend=y_bar),
-                   linewidth=0.6, inherit.aes=FALSE),
-      geom_segment(data=sig_fid2, aes(x=x1,xend=x1,y=y_bar-1.5,yend=y_bar),
-                   linewidth=0.6, inherit.aes=FALSE),
-      geom_segment(data=sig_fid2, aes(x=x2,xend=x2,y=y_bar-1.5,yend=y_bar),
-                   linewidth=0.6, inherit.aes=FALSE),
-      geom_text(data=sig_fid2, aes(x=(x1+x2)/2,y=y_bar+2,label=sig),
-                size=5, inherit.aes=FALSE)
-  )} +
-  scale_fill_manual(values=COL_COND) +
-  scale_y_continuous(labels=percent_format(accuracy=1,scale=1),
-                     expand=expansion(mult=c(0,0.2)), limits=c(0,NA)) +
-  labs(x=NULL, y="Fidelity Forgetting (%)") +
-  theme_classic(base_size=8) +
-  theme(legend.position="none",
-        axis.line=element_line(linewidth=0.8,colour="black"),
-        axis.text.x=element_text(size=8,colour="black",angle=30,hjust=1),
-        axis.text.y=element_text(size=8,colour="black"),
-        axis.title=element_text(size=8,colour="black"),
-        plot.margin=margin(10,10,15,10)) +
-  coord_cartesian(clip="off")
-
-print(p_fid2)
-ggsave(file.path(FIG_DIR,"Fig_6c_Fidelity_Recoded.png"), p_fid2, width=3.2, height=3.5, dpi=600)
-ggsave(file.path(FIG_DIR,"Fig_6c_Fidelity_Recoded.pdf"), p_fid2, width=3.2, height=3.5, device=cairo_pdf)
-ggsave(file.path(FIG_DIR,"Fig_6c_Fidelity_Recoded.svg"), p_fid2, width=3.2, height=3.5, device="svg")
-cat("Fidelity recoded figure saved.\n")
-```
-
-## 7b.4 Forgetting index (pre − post score)
+# 7. Fidelity Forgetting Index (pre - post score)
 
 ```{r fidelity_index}
 matched_fid_idx <- matched %>%
@@ -828,17 +560,16 @@ matched_fid_idx %>%
             .groups = "drop") %>%
   print()
 
-# Aggregate to participant level first
 pp_fid_idx <- matched_fid_idx %>%
   group_by(sub, Condition_f) %>%
   summarise(mean_idx = mean(fid_forgetting_index, na.rm = TRUE), .groups = "drop")
 
-# LME on participant-level means
 m_fid_idx <- lmer(mean_idx ~ Condition_f + (1 | sub),
                   data = pp_fid_idx)
 
 cat("\n=== Fidelity Index LME — ANOVA (participant level) ===\n")
-print(anova(m_fid_idx))
+fid_idx_anova <- anova(m_fid_idx)
+print(fid_idx_anova)
 
 emm_idx  <- emmeans(m_fid_idx, ~ Condition_f)
 pair_idx <- contrast(emm_idx, method = "pairwise", adjust = "none")
@@ -851,12 +582,10 @@ check_glmm_assumptions(m_fid_idx, "Fidelity Forgetting Index (m_fid_idx, LMM)")
 ```
 
 ```{r fig_fidelity_index}
-# Define pp_idx FIRST
 pp_idx <- matched_fid_idx %>%
   group_by(sub, Condition_f) %>%
   summarise(rate=mean(fid_forgetting_index,na.rm=TRUE), .groups="drop")
 
-# Significance bars - spacing increased to prevent brackets/asterisks overlapping
 sig_idx <- as.data.frame(summary(pair_idx)) %>%
   filter(p.value < .06) %>%
   mutate(
@@ -883,7 +612,6 @@ p_fid_idx <- ggplot() +
                 width=0.15, linewidth=0.8, colour="black") +
   geom_line(data=pp_idx, aes(x=as.numeric(Condition_f),y=rate,group=sub),
             colour="grey65", linewidth=0.45, alpha=0.65) +
-  # Data point size reduced per Derk-Jan's comment (size 2.2 -> 1.4, stroke 0.6 -> 0.5)
   geom_point(data=pp_idx, aes(x=Condition_f,y=rate,fill=Condition_f),
              shape=21, size=1.4, stroke=0.5, colour="black", alpha=0.85,
              position=position_jitter(width=0.06,seed=123,height=0)) +
@@ -925,8 +653,11 @@ cat("Fidelity index figure saved.\n")
 
 # 8. Combined Main Figure
 
+Rebuilt to use the Fidelity Forgetting Index panel (Section 7) rather than the
+original binary Fidelity panel, since the binary version was removed.
+
 ```{r fig_combined_main}
-p_main <- (p_recollection | p_familiarity | p_fidelity) +
+p_main <- (p_recollection | p_familiarity | p_fid_idx) +
   plot_annotation(tag_levels = "A")
 print(p_main)
 ggsave(file.path(FIG_DIR,"Fig_MAIN_Combined.png"), p_main, width=9.6, height=3.5, dpi=600)
@@ -937,43 +668,7 @@ cat("Combined figure saved.\n")
 
 ---
 
-# 9. Recollection by Stimulus Category
-
-```{r catcond_interaction}
-m_cat_cond <- glmer(rec_forgetting ~ Condition_f * stim_type + (1 | sub),
-                    data=matched_rec, family=binomial,
-                    control=glmerControl(optimizer="bobyqa", optCtrl=list(maxfun=2e5)))
-cat("=== Condition x Category ===\n")
-print(Anova(m_cat_cond, type="II"))
-```
-
-```{r diag_m_cat_cond, fig.width=8, fig.height=4}
-check_glmm_assumptions(m_cat_cond, "Condition x Category interaction (m_cat_cond)")
-```
-
-```{r faces_objects}
-matched_faces   <- matched_rec %>% filter(stim_type == "Face")
-matched_objects <- matched_rec %>% filter(stim_type == "Object")
-
-m_face <- glmer(rec_forgetting ~ Condition_f + (1 | sub), data=matched_faces,
-                family=binomial, control=glmerControl(optimizer="bobyqa"))
-cat("=== Faces ===\n"); print(Anova(m_face, type="II"))
-print(summary(contrast(emmeans(m_face,~Condition_f), method="pairwise", adjust="none")))
-
-m_obj <- glmer(rec_forgetting ~ Condition_f + (1 | sub), data=matched_objects,
-               family=binomial, control=glmerControl(optimizer="bobyqa"))
-cat("=== Objects ===\n"); print(Anova(m_obj, type="II"))
-print(summary(contrast(emmeans(m_obj,~Condition_f), method="pairwise", adjust="none")))
-```
-
-```{r diag_m_face_obj, fig.width=8, fig.height=4}
-check_glmm_assumptions(m_face, "Recollection - Faces only (m_face)")
-check_glmm_assumptions(m_obj,  "Recollection - Objects only (m_obj)")
-```
-
----
-
-# 10. Supplementary
+# 9. Supplementary
 
 ## S1. Block-level analysis
 
@@ -995,22 +690,9 @@ cat("=== Block ===\n"); print(Anova(m_block, type="II"))
 check_glmm_assumptions(m_block, "Pre-nap block-level accuracy (m_block)")
 ```
 
-## S2. False alarm rates
-
-```{r supp_far}
-far_df <- post_raw %>%
-  filter(Corr_resp_Old_New_ == "New") %>%
-  mutate(false_alarm=as.integer(Selection_Old_New_ == "Old")) %>%
-  group_by(sub) %>%
-  summarise(far=mean(false_alarm,na.rm=TRUE)*100, .groups="drop")
-
-cat(sprintf("False alarm rate: Mean = %.1f%%  SD = %.1f%%\n",
-            mean(far_df$far), sd(far_df$far)))
-```
-
 ---
 
-# 11. Export Tables
+# 10. Export Tables
 
 ```{r export}
 writexl::write_xlsx(
@@ -1021,22 +703,12 @@ writexl::write_xlsx(
                 Forgetting_pct=round(mean(fam_forgetting)*100,1),
                 SE=round(sd(fam_forgetting)/sqrt(n())*100,1), .groups="drop"),
     Recollection_rates = rec_rates,
-    Fidelity_rates     = matched_fid %>%
-      group_by(Condition_f) %>%
-      summarise(N=n(), Correct_pct=round(mean(fid_correct)*100,1),
-                Forgetting_pct=round(mean(fid_forgetting)*100,1),
-                SE=round(sd(fid_forgetting)/sqrt(n())*100,1), .groups="drop"),
     Fam_pairwise_OR    = as.data.frame(summary(pair_fam)),
     Fam_pairwise_zp    = as.data.frame(summary(pair_fam_logit)),
     Rec_pairwise_OR    = as.data.frame(summary(pair_rec)),
     Rec_pairwise_zp    = as.data.frame(summary(pair_rec_logit)),
-    Fid_pairwise_OR    = as.data.frame(summary(pair_fid)),
-    Fid_pairwise_zp    = as.data.frame(summary(pair_fid_logit)),
-    Fid2_pairwise_OR   = as.data.frame(summary(pair_fid2)),
-    Fid2_pairwise_zp   = as.data.frame(summary(pair_fid2_logit)),
     Fid_Index_pairwise = as.data.frame(summary(pair_idx)),
     TMR_pairwise       = as.data.frame(summary(pair_tmr)),
-    False_alarm_rates  = far_df,
     PrePost_accuracy   = acc_wide
   ),
   path = file.path(TABLE_DIR, "MYSTI_Behavioural_Statistical_Results.xlsx")
@@ -1046,7 +718,7 @@ cat(sprintf("Tables saved to: %s\n", TABLE_DIR))
 
 ---
 
-# 12. Results Summary
+# 11. Results Summary
 
 ```{r summary}
 cat("══════════════════════════════════════════════════════════\n")
@@ -1061,18 +733,15 @@ cat(sprintf("Familiarity: chi2(%d) = %.2f, p = %.4f\n\n",
             fam_anova$Df, fam_anova$Chisq, fam_anova$`Pr(>Chisq)`))
 cat(sprintf("Recollection: chi2(%d) = %.2f, p = %.4f\n\n",
             rec_anova$Df, rec_anova$Chisq, rec_anova$`Pr(>Chisq)`))
-cat(sprintf("Fidelity (binary): chi2(%d) = %.2f, p = %.4f\n\n",
-            fid_anova$Df, fid_anova$Chisq, fid_anova$`Pr(>Chisq)`))
-cat(sprintf("Fidelity (recoded 0+1 vs 2+3): chi2(%d) = %.2f, p = %.4f\n\n",
-            fid2_anova$Df, fid2_anova$Chisq, fid2_anova$`Pr(>Chisq)`))
-cat(sprintf("Fidelity CLMM (ordinal 0-3): LRT chi2(3) = %.2f, p = %.4f\n\n",
-            lrt[2,"LR.stat"], lrt[2,"Pr(>Chisq)"]))
+cat(sprintf("Fidelity Forgetting Index: F(%s) = %.2f, p = %.4f\n\n",
+            paste(fid_idx_anova$NumDF, fid_idx_anova$DenDF, sep=","),
+            fid_idx_anova$`F value`, fid_idx_anova$`Pr(>F)`))
 cat("══════════════════════════════════════════════════════════\n")
 ```
 
 ---
 
-# 13. Session Information
+# 12. Session Information
 
 ```{r session_info}
 sessionInfo()
