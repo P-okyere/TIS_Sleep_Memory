@@ -3,16 +3,17 @@ clear; clc; close all;
 %% ============================
 %  EDIT FOR YOUR ENVIRONMENT
 %% ============================
-base_path = '/path/to/MYSTI';
+bids_root  = 'E:\BIDS';
+bids_deriv = fullfile(bids_root, 'derivatives');
 
 % Must match out_root/spindle_type/topoplot_significant from
 % slow_spindle_cluster_permutation_stats.m, and fname must match its
 % 'fname' variable - this is where that script saved
 % <fname>_sig_channels_clusterN.csv
-stats_dir = fullfile(base_path, 'derivatives', 'spindle_amplitude_stats', 'slow', 'topoplot_significant');
+stats_dir = fullfile(bids_deriv, 'spindle_amplitude_stats', 'slow', 'topoplot_significant');
 stats_fname_prefix = 'slow_absolute_ANOVA_clusterperm';
 
-output_folder = fullfile(base_path, 'derivatives', 'spindle_amplitude_stats', 'slow', 'barplots');
+output_folder = fullfile(bids_deriv, 'spindle_amplitude_stats', 'slow', 'barplots');
 
 if ~exist(output_folder,'dir'), mkdir(output_folder); end
 % ============================
@@ -64,8 +65,7 @@ n_panels = n_clusters + 1;
 %% ============================
 %  LOAD DATA
 %% ============================
-load(fullfile(base_path, ...
-    'trial_density_slowspindle_conditions_clean3.5s.mat'), ...
+load(fullfile(bids_deriv, 'spindle_so_detection', 'desc-slowSpindleMetrics_trialdata.mat'), ...
     'all_trial_data');
 
 %% ============================
@@ -232,7 +232,7 @@ for cl = 1:n_panels
 end
 
 %% ============================
-%  COMBINED PANEL (3 side by side) — NO TITLES
+%  COMBINED PANEL (3 side by side) 
 %% ============================
 fprintf('\nGenerating 3-panel combined figure...\n');
 
