@@ -63,10 +63,13 @@ invisible(lapply(required_packages, library, character.only = TRUE))
 # Step 2 — Set paths and figure/colour conventions
 
 ```{r paths}
-base        <- "C:/Users/po00240/OneDrive - University of Surrey/Desktop/Projects/MYSTI"
-behav_v2    <- "C:/Users/po00240/OneDrive - University of Surrey/Desktop/Wake_behavior_data/figure3/FamRecFid_Tables/MYSTI_FamRecFid_V2_NAkept.xlsx"
-efield_file <- file.path(base, "ALL_subjects_TI_metrics.csv")
-out_dir     <- file.path(base, "stats_output", "EField_Behaviour")
+# ==== EDIT FOR YOUR ENVIRONMENT ====
+bids_deriv <- "E:/BIDS/derivatives"
+# ====================================
+
+behav_v2    <- file.path(bids_deriv, "behaviour", "desc-FamRecFidSummary_results.xlsx")
+efield_file <- file.path(bids_deriv, "efield", "desc-EField_metrics.csv")
+out_dir     <- file.path(bids_deriv, "EField_Behaviour_stats", "stats_output", "EField_Behaviour")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 ```
 
@@ -211,4 +214,3 @@ run_efield_plot(m3, "HP_Head_Collateral",  label = "m3_HP_Head_Collateral_covari
 ```
 
 # Summary of results
-
