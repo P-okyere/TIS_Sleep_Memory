@@ -46,8 +46,12 @@ cat("All packages loaded\n")
 ## 1.2 Paths and constants
 
 ```{r config}
-PRE_FILE  <- "C:/Users/po00240/OneDrive - University of Surrey/Desktop/Wake_behavior_data/Participants_pre_data_transcribed_corrected.xlsx"
-POST_FILE <- "C:/Users/po00240/OneDrive - University of Surrey/Desktop/Wake_behavior_data/Participants_post_data_transcribed_corrected.xlsx"
+# ==== EDIT FOR YOUR ENVIRONMENT ====
+BASE_PATH <- "E:/BIDS/derivatives/behaviour"
+# ====================================
+
+PRE_FILE  <- file.path(BASE_PATH, "desc-preNapBehaviour_trialdata.xlsx")
+POST_FILE <- file.path(BASE_PATH, "desc-postNapBehaviour_trialdata.xlsx")
 FIG_DIR   <- "C:/Users/po00240/OneDrive - University of Surrey/Desktop/Wake_behavior_data/Chapter3_Supplementary/Figures2"
 dir.create(FIG_DIR, showWarnings = FALSE, recursive = TRUE)
 
