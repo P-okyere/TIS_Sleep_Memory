@@ -51,10 +51,11 @@ cat("All packages loaded\n")
 
 ```{r config}
 # ==== EDIT FOR YOUR ENVIRONMENT ====
-BASE_PATH <- "/path/to/MYSTI"
+BIDS_ROOT      <- "/path/to/BIDS"
+EFIELD_DERIV   <- file.path(BIDS_ROOT, "derivatives", "efield")
 # ====================================
 
-out_dir <- file.path(BASE_PATH, "derivatives", "EField_Subregions")
+out_dir <- file.path(BIDS_ROOT, "derivatives", "EField_Subregions")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 cat("Output folder:", out_dir, "\n")
 
@@ -69,7 +70,7 @@ font_size     <- 10    # matches the behavioural analysis notebook's base_size
 ## 1.3 Load data
 
 ```{r load_data}
-df <- read.csv(file.path(BASE_PATH, "ALL_subjects_TI_metrics.csv"))
+df <- read.csv(file.path(EFIELD_DERIV, "desc-EField_metrics.csv"))
 df <- df[, !grepl("^Unnamed", colnames(df))]
 colnames(df) <- c("Subject", "Region", "Strength", "Selectivity", "Collateral")
 
