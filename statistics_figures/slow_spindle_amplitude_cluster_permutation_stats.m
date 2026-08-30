@@ -3,10 +3,11 @@ clear; clc; close all;
 %% ============================
 %  EDIT FOR YOUR ENVIRONMENT
 %% ============================
-base_path      = '/path/to/MYSTI';
-base_path_eeg  = '/path/to/MYSTI/eeg';
-out_root       = fullfile(base_path, 'derivatives', 'spindle_amplitude_stats');
-batlow_path    = '/path/to/ScientificColourMaps8/batlow';
+bids_root      = 'E:\BIDS';
+bids_deriv     = fullfile(bids_root, 'derivatives');
+base_path_eeg  = bids_root;
+out_root       = fullfile(bids_deriv, 'spindle_amplitude_stats');
+batlow_path    = 'C:\Users\po00240\OneDrive - University of Surrey\Desktop\Projects\MYSTI\_matlab_scripts (1)_first\Stats\ScientificColourMaps8\batlow';
 % ============================
 
 if ~exist(out_root,'dir'), mkdir(out_root); end
@@ -34,13 +35,13 @@ min_cluster_size = 2;      % minimum channels to form a cluster
 %% ============================
 %  LOAD DATA
 %% ============================
-load(fullfile(base_path,'trial_density_slowspindle_conditions_clean3.5s.mat'), ...
+load(fullfile(bids_deriv, 'spindle_so_detection', 'desc-slowSpindleMetrics_trialdata.mat'), ...
      'all_trial_data');
 
 %% ============================
-%  EEG LAYOUT — matches Chapter 4 exactly
+%  EEG LAYOUT 
 %% ============================
-example_EEG = pop_loadset('filename', 'sub-41_task-nap_eeg_with_all_spindles.set', ...
+example_EEG = pop_loadset('filename', 'sub-41_task-nap_eeg.set', ...
                           'filepath', fullfile(base_path_eeg, 'sub-41', 'eeg'));
 ft_data     = eeglab2fieldtrip(example_EEG, 'preprocessing', 'none');
 
@@ -82,7 +83,7 @@ channels   = ft_data.label;
 n_channels = numel(channels);
 
 %% ============================
-%  NEIGHBOUR STRUCTURE — matches Chapter 4 exactly
+%  NEIGHBOUR STRUCTURE
 %% ============================
 cfg_neigh        = [];
 cfg_neigh.method = 'triangulation';
@@ -187,7 +188,6 @@ for s = 1:numel(spindle_types)
 
     %% ====================================================
     %  STEP 1 — Observed F values (channel-wise LME)
-    %  Same LME as original script — not changed
     %% ====================================================
     fvals_obs = nan(n_channels, 1);
     pvals_obs = nan(n_channels, 1);
@@ -213,8 +213,6 @@ for s = 1:numel(spindle_types)
 
     %% ====================================================
     %  STEP 2 — Participant-level condition means
-    %  Shape: nP x n_channels x n_conds
-    %  Exactly as Chapter 4: avg_cond per participant per channel
     %% ====================================================
     n_conds   = numel(marker_set);
     sub_means = nan(nP, n_channels, n_conds);
@@ -234,7 +232,7 @@ for s = 1:numel(spindle_types)
     end
 
     %% ====================================================
-    %  STEP 3 — Observed clusters (positive only — F is always positive)
+    %  STEP 3 — Observed clusters
     %% ====================================================
     sig_mask_obs = pvals_obs < cluster_alpha & ~isnan(fvals_obs);
 
@@ -246,11 +244,6 @@ for s = 1:numel(spindle_types)
 
     %% ====================================================
     %  STEP 4 — Permutation using sign-flip on condition means
-    %  Matches Chapter 4 exactly:
-    %  - compute participant difference across conditions
-    %  - randomly flip sign per participant
-    %  - ttest across participants per channel
-    %  - find max cluster mass under H0
     %% ====================================================
     fprintf('Running %d permutations...\n', n_perm);
     perm_max_mass = nan(n_perm, 1);
@@ -308,7 +301,6 @@ for s = 1:numel(spindle_types)
 
     %% ====================================================
     %  STEP 5 — Test each cluster against null distribution
-    %  Matches Chapter 4 exactly
     %% ====================================================
     all_sig_channels = {};
     n_sig            = 0;
@@ -347,7 +339,7 @@ for s = 1:numel(spindle_types)
     end
 
     %% ====================================================
-    %  STEP 7 — Plot (matches Chapter 4 style exactly)
+    %  STEP 7 — Plot
     %% ====================================================
     fig = figure('Color','w','Units','inches', ...
                  'Position',[1 1 fig_width fig_height]);
@@ -364,8 +356,6 @@ for s = 1:numel(spindle_types)
 
          cfg.zlim = [0 10];
     ft_topoplotER(cfg, data);
-
-    % ft_topoplotER(cfg, data);
 
     h = colorbar;
     ylabel(h, 'F value', 'FontSize', font_size);
@@ -477,8 +467,7 @@ fprintf('\n✅ All done.\n');
 
 
 %% ============================
-%  HELPER FUNCTION
-%  Identical to Chapter 4 find_all_clusters
+%  HELPER FUNCTIOn
 %% ============================
 function [clusters, masses] = find_all_clusters(tvals, sig_mask, channels, neighbours, min_size)
     clusters = {};
