@@ -3,16 +3,17 @@ clear; clc; close all;
 %% ============================
 %  EDIT FOR YOUR ENVIRONMENT
 %% ============================
-base_path = '/path/to/MYSTI';
+bids_root  = 'E:\BIDS';
+bids_deriv = fullfile(bids_root, 'derivatives');
 
 % Must match out_root/spindle_type/topoplot_significant from
 % fast_spindle_cluster_permutation_stats.m, and fname must match its
 % 'fname' variable - this is where that script saved
 % <fname>_sig_channels_clusterN.csv
-stats_dir = fullfile(base_path, 'derivatives', 'spindle_amplitude_stats', 'fast', 'topoplot_significant');
+stats_dir = fullfile(bids_deriv, 'spindle_amplitude_stats', 'fast', 'topoplot_significant');
 stats_fname_prefix = 'fast_absolute_ANOVA_clusterperm';
 
-output_folder = fullfile(base_path, 'derivatives', 'spindle_amplitude_stats', 'fast', 'barplots');
+output_folder = fullfile(bids_deriv, 'spindle_amplitude_stats', 'fast', 'barplots');
 
 if ~exist(output_folder,'dir'), mkdir(output_folder); end
 % ============================
@@ -70,7 +71,7 @@ n_panels = n_clusters + 1;
 %% ============================
 %  LOAD DATA
 %% ============================
-load(fullfile(base_path,'trial_density_all_conditions_clean3.5s.mat'), ...
+load(fullfile(bids_deriv, 'spindle_so_detection', 'desc-fastSpindleMetrics_trialdata.mat'), ...
      'all_trial_data');
 
 %% ============================
