@@ -9,13 +9,14 @@ function result = MYSTI_SO_Spindle_Coupling(base_path, participant, marker_type)
 % at the spindle peak. Results are saved one .mat file per channel.
 %
 % INPUTS
-%   base_path    - root data folder (contains <participant>/eeg/...)
+%   base_path    - BIDS root folder (e.g. 'E:\BIDS')
 %   participant  - subject ID, e.g. 'sub-03'
 %   marker_type  - trial/condition label to process, e.g. 'Cue'
 %
 % REQUIRED INPUT FILES
-%   <base_path>/<participant>/eeg/<participant>_task-nap_eeg_with_NO_STIM.set
-%   <base_path>/<participant>/eeg/<participant>_fastSpindleMarkers_clean3.5s.mat
+%   <base_path>/<participant>/eeg/<participant>_task-nap_eeg.set
+%   <base_path>/derivatives/spindle_so_detection/<participant>/eeg/
+%       <participant>_task-nap_desc-fastSpindleMarkers_events.mat
 %       (spindles already detected — this script does not detect them)
 %
 % OUTPUT
@@ -23,14 +24,16 @@ function result = MYSTI_SO_Spindle_Coupling(base_path, participant, marker_type)
 %       <participant>_<marker_type>_<channel>_LOCAL_SOspindle_TRIALS_PHASE.mat
 %
 % MYSTI pipeline - Prince Okyere, NSN Lab / KCL
-% Last updated: 2026-08-13
+% Last updated: 2026-08-31
 
 fprintf('\nSO-spindle coupling | %s | %s\n', participant, marker_type);
 
 %% Paths
 eeg_dir      = fullfile(base_path, participant, 'eeg');
-eeg_file     = fullfile(eeg_dir, [participant '_task-nap_eeg_with_NO_STIM.set']);
-spindle_file = fullfile(eeg_dir, [participant '_fastSpindleMarkers_clean3.5s.mat']);
+eeg_file     = fullfile(eeg_dir, [participant '_task-nap_eeg.set']);
+
+spindle_dir  = fullfile(base_path, 'derivatives', 'spindle_so_detection', participant, 'eeg');
+spindle_file = fullfile(spindle_dir, [participant '_task-nap_desc-fastSpindleMarkers_events.mat']);
 
 if ~exist(eeg_file, 'file'),     error('Missing EEG file: %s', eeg_file); end
 if ~exist(spindle_file, 'file'), error('Missing spindle file: %s', spindle_file); end
