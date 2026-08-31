@@ -36,7 +36,7 @@ sig_channels_map('TIS+Cue') = {'T7','C5','TP9','TP7','FC3','P7','P5','PO3','C4',
 
 conditions_with_clusters = {'Cue', 'TIS+Cue'};
 
-% Colours - matches COL_COND from the Chapter 3 behaviour script
+% Colours - matches COL_COND from the behavioural analysis figures
 condition_colors = containers.Map();
 condition_colors('TIS+Cue')         = [0.608 0.561 0.831];  % #9B8FD4
 condition_colors('TIS+Cue delayed') = [0.290 0.565 0.851];  % #4A90D9
